@@ -14,9 +14,9 @@ lifted out of it so that another app doesn't have to write it again.
 | `rife2-native-app` jar | the C functions that the app calls, around RIFE2's `SiteRunner`, and the script that the pages need inside an app |
 | `RIFE2NativeApp` Swift package | starts the site's Java in an iOS or macOS app and shows its pages in a web view |
 | `android/` | the classes that show the site in an Android app, and the bridge that's linked into the site's library |
+| `extension/` | the bld extension `bld-native-app`, which builds the site into a native library and checks it |
 | `checks/ask.c` | asks a native library for addresses without an app, to compare its answers with the JVM's |
-
-The bld extension that builds the native libraries is next.
+| `checks/android/` | an app made of the Android classes only, which shows a native library and taps through it |
 
 ## The site
 
@@ -216,6 +216,58 @@ isn't synchronous, and a form that doesn't post as plain text. A
 synchronous `XMLHttpRequest`, `navigator.sendBeacon` and a worker post
 nothing.
 
+## Building the native library
+
+The bld extension builds the site with GraalVM's native-image. A build
+names it in `lib/bld/bld-wrapper.properties`:
+
+```
+bld.extensions=com.uwyn.rife2:bld-native-app:1.11.0-SNAPSHOT
+```
+
+and its build class extends `NativeAppProject` instead of `WebProject`:
+
+```java
+public class MyBuild extends NativeAppProject {
+    public MyBuild() {
+        // ...
+        scope(compile)
+            .include(dependency("com.uwyn.rife2", "rife2-native-app", version("1.11.0-SNAPSHOT")));
+
+        nativeApp()
+            .libraryName("mysite")
+            .addresses("/css/site.css", "/js/site.js", "/nothing-here");
+    }
+}
+```
+
+That adds three commands, each of which takes `mac`, `ios`, `ios-sim` or
+`android`:
+
+| Command | What it does |
+|---|---|
+| `./bld native-library <target>` | builds `build/native/<target>/`: a framework for Apple's systems, with a privacy manifest that declares what its code uses, or a shared library for Android with the bridge linked in |
+| `./bld native-check <target>` | asks the native library for the addresses of `nativeApp().addresses()`, on this Mac, in a simulator or on what adb sees, and compares its answers with the JVM's |
+| `./bld native-jdk-libs <target>` | builds the JDK libraries that iOS and Android need and GraalVM doesn't ship, once for every app on this machine |
+
+Before every native build, the site is asked for those addresses on the
+JVM, and goes through the `main` of `nativeApp().walk(...)` when there is
+one, with GraalVM's tracing agent, which records what the library needs
+that native-image can't see by itself. An address whose answer changes
+each time, like a page with a CSRF token, can't be checked.
+
+It builds with GraalVM Community Edition 25.5 as sdkman installs it
+(`sdk install java 25.5.5.0+3-graalce`), or the GraalVM of `GRAALVM_HOME`.
+Without the JDK libraries that `native-jdk-libs` builds, a library for iOS
+is built with stand-ins, the macOS libraries with the platform of their
+object files rewritten, which is fine in the simulator; a library for a
+device that ships uses the real ones. Those are built from the sources of
+the JDK in GraalVM with the port of OpenJDK's mobile project, which needs
+autoconf and GNU make (`brew install autoconf make`) and takes about ten
+minutes the first time. Android also needs Docker, since native-image
+builds for it in a Linux container, the NDK, and an emulator or a device
+to answer what native-image asks about Android's C types.
+
 ## Checking a site
 
 On the JVM, before a native build:
@@ -226,7 +278,16 @@ java -cp "<the site's classpath>" rife.nativeapp.NativeApp /some/page /another
 
 prints the status, size and CRC-32 of each answer. `checks/ask.c`, linked
 with the native library, prints the status, size and CRC-32 of the same
-addresses, as `address status size crc`, which the two can be compared by.
+addresses, as `address status size crc`, which the two can be compared by;
+`./bld native-check` does that.
+
+```console
+checks/android/check.sh build/native/android/libmysite.so "see:Welcome" "tap:Sign in" "see:Your account"
+```
+
+builds an app of the Android classes around a library, installs it on
+what adb sees, and goes through it: each step waits until the screen shows
+a text, or taps it.
 
 ## License
 

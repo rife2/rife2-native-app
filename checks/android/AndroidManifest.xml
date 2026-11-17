@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- An app that only shows a site's native library with the classes of rife2-native-app, for
+     check.sh. The library's name is the rife2.library meta-data, which check.sh fills in. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="rife.nativeapp.check">
+    <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="34"/>
+    <application android:label="RIFE2 check" android:extractNativeLibs="true" android:allowBackup="false">
+        <meta-data android:name="rife2.library" android:value="LIBRARY"/>
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+        <provider android:name="rife.nativeapp.android.NativeShared" android:authorities="rife.nativeapp.check.rife2.files"
+                  android:exported="false" android:grantUriPermissions="true"/>
+    </application>
+</manifest>
