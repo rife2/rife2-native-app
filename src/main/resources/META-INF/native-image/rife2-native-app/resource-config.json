@@ -1,0 +1,9 @@
+{
+  "resources": {
+    "includes": [
+      {
+        "pattern": "\\Qwebapp/rife2-native-app.js\\E"
+      }
+    ]
+  }
+}
