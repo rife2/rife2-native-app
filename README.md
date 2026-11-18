@@ -62,7 +62,7 @@ arrives as properties, which a site can also read in its `setup()`:
 |---|---|
 | `rife.nativeapp.platform` | `ios`, `mac` or `android` |
 | `rife.nativeapp.data` | the directory where the app keeps what should last; the cookies of the site are kept there |
-| `rife.nativeapp.scheme`, `rife.nativeapp.host` | the address that the web view has the site at: `app://site` on Apple's systems and `https://<package>.invalid` on Android, unless the app says otherwise |
+| `rife.nativeapp.scheme`, `rife.nativeapp.host` | the address that the web view has the site at: `app://site` on Apple's systems and `https://<package>.invalid` on Android, unless the app says otherwise; an Android app keeps `https` |
 | `rife.nativeapp.temp` | the directory for temporary files and uploads, when Java's own isn't one that the app may write in |
 | `rife.nativeapp.version`, `rife.nativeapp.buildNumber` | the version of the app and its build number |
 | `rife.nativeapp.wholeResponses` | `true` when the app takes each answer all at once on the thread that asked, as on Android; a response that goes on after its request, like an event stream, then ends with it |

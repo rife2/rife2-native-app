@@ -38,7 +38,9 @@ public final class NativeSite {
     /**
      * The scheme of the address that the web view has the site at. A web
      * view of Android only keeps what a page stores for an address of the
-     * web, so it's {@code https}.
+     * web, so it's {@code https}, and it's best left that way: another one
+     * gives the pages an origin without a host, which the site's cookie jar
+     * can't tell from another site's.
      */
     public static String scheme = "https";
     /**

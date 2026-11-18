@@ -246,7 +246,7 @@ public class NativeRequests {
             // without what a browser leaves out of an address.
             var resolved = resolved(address, location.replaceAll("[\\t\\r\\n]", "").replaceAll("^[\\x00-\\x20]+|[\\x00-\\x20]+$", ""));
             var scheme = null == resolved ? null : Uri.parse(resolved).getScheme();
-            if (null == resolved || !resolved.startsWith(NativeSite.root(context_) + "/") && !"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
+            if (null == resolved || !NativeSite.own(context_, Uri.parse(resolved)) && !"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
                 return new WebResourceResponse("text/plain", "UTF-8", 502, "Bad Gateway", Map.of("Cache-Control", "no-store"), new ByteArrayInputStream(new byte[0]));
             }
             // a < in the address would otherwise be read as markup by the page
