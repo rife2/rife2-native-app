@@ -7,7 +7,7 @@
 
 # RIFE2 Native App
 
-Runs a [RIFE2](https://rife2.com) site inside an iOS, macOS or Android app.
+Runs a [RIFE2](https://rife2.com) site inside an iOS, macOS, visionOS or Android app.
 GraalVM compiles the site to a native library, and the app's web view gets
 its pages from that library in the same process, without a server or a port.
 
@@ -20,8 +20,8 @@ has what goes around it: the code of the apps, and what builds and checks
 the native library.
 
 Everything here runs on a Mac with Apple silicon, and builds for arm64:
-iOS devices and the simulator on that Mac, macOS, and Android devices and
-emulators of `arm64-v8a`.
+iOS and visionOS devices and their simulators on that Mac, macOS, and
+Android devices and emulators of `arm64-v8a`.
 
 ## What's here
 
@@ -60,7 +60,7 @@ arrives as properties, which a site can also read in its `setup()`:
 
 | Property | What it is |
 |---|---|
-| `rife.nativeapp.platform` | `ios`, `mac` or `android` |
+| `rife.nativeapp.platform` | `ios`, `mac`, `vision` or `android` |
 | `rife.nativeapp.data` | the directory where the app keeps what should last; the cookies of the site are kept there |
 | `rife.nativeapp.scheme`, `rife.nativeapp.host` | the address that the web view has the site at: `app://site` on Apple's systems and `https://<package>.invalid` on Android, unless the app says otherwise; an Android app keeps `https` |
 | `rife.nativeapp.temp` | the directory for temporary files and uploads, when Java's own isn't one that the app may write in |
@@ -134,13 +134,14 @@ call. Each request has a number that no request had before, which
 
 ## The Swift package
 
-An iOS 17 or macOS 14 app adds this repository as a Swift package, with
-`branch: "master"` until it has a release to give as a version. Its target
-also adds the framework that native-image built from its site to
-"Frameworks, Libraries, and Embedded Content" with "Embed & Sign":
-`build/native/mysite.xcframework` for iOS, which has the frameworks for
-devices and for the simulator that were built, so build both before an
-archive, or `build/native/mac/mysite.framework` for macOS. Then a SwiftUI
+An iOS 17, macOS 14 or visionOS 26 app adds this repository as a Swift
+package, with `branch: "master"` until it has a release to give as a
+version. Its target also adds the framework that native-image built from
+its site to "Frameworks, Libraries, and Embedded Content" with "Embed &
+Sign": `build/native/mysite.xcframework` for iOS and visionOS, which has the
+frameworks for their devices and simulators that were built, so build both
+of a system before an archive, or `build/native/mac/mysite.framework` for
+macOS. Then a SwiftUI
 app shows the site with:
 
 ```swift
@@ -161,9 +162,10 @@ struct MyApp: App {
 
 `NativePages` opens links that leave the site in the system, saves or
 shares the files that a page downloads, prints, and loads the page again
-when the system stopped what draws it. An app changes or adds to that by
-subclassing it, for instance to add its own message handlers in
-`configure(_:)`.
+when the system stopped what draws it. It publishes the `path` of the page
+that's shown and whether it `canGoBack`, for what the app shows around the
+pages. An app changes or adds to that by subclassing it, for instance to add
+its own message handlers in `configure(_:)`.
 
 `NativeSite.scheme`, `NativeSite.host` and `NativeSite.properties` are set
 before the first page, when the app wants another address than `app://site`
@@ -346,6 +348,7 @@ in RIFE2's wiki describes, since a native image has no java agent.
 | `property(name, value)` | a property that the site is told on the JVM and by `native-check`, like the app would tell it |
 | `privacyManifest(file)` | the privacy manifest of the framework; without one, it's written from what the library's code uses |
 | `simulator(name)` | the simulator of `native-check ios-sim`, `iPhone 17` unless it's set |
+| `visionSimulator(name)` | the simulator of `native-check vision-sim`, `Apple Vision Pro` unless it's set |
 | `androidSdk(directory)` | the Android SDK; `ANDROID_HOME`, or `~/Library/Android/sdk`, when it's not set |
 | `androidNdk(version)` | the version of the NDK in that SDK, `28.2.13676358` unless it's set |
 | `androidApi(level)` | the oldest Android that the library runs on, 29 unless it's set |
@@ -374,9 +377,14 @@ That adds three commands, which run on a Mac, for these targets:
 
 | Command | What it does |
 |---|---|
-| `./bld native-library mac\|ios\|ios-sim\|android` | builds `build/native/<target>/`: a framework for Apple's systems, with a privacy manifest that declares what its code uses, or a shared library for Android with the bridge linked in. For iOS it also makes `build/native/<name>.xcframework` of the frameworks for devices and for the simulator that were built, which Xcode links |
-| `./bld native-check mac\|ios-sim\|android` | asks the native library for the addresses of `nativeApp().addresses()`, on this Mac, in a simulator (which it boots and shuts down again when it wasn't running) or on what adb sees, and compares its answers with the JVM's |
+| `./bld native-library mac\|ios\|ios-sim\|vision\|vision-sim\|android` | builds `build/native/<target>/`: a framework for Apple's systems, with a privacy manifest that declares what its code uses, or a shared library for Android with the bridge linked in. For iOS and visionOS it also makes `build/native/<name>.xcframework` of the frameworks for their devices and simulators that were built, which Xcode links |
+| `./bld native-check mac\|ios-sim\|vision-sim\|android` | asks the native library for the addresses of `nativeApp().addresses()`, on this Mac, in a simulator (which it boots and shuts down again when it wasn't running) or on what adb sees, and compares its answers with the JVM's |
 | `./bld native-jdk-libs ios\|ios-sim\|android` | builds the JDK libraries that iOS and Android need and GraalVM doesn't ship, once for every app on this Mac; `android` uses the sources that a run for iOS fetched |
+
+GraalVM has no target for visionOS, so a library for it is built as one for
+iOS is, with the JDK libraries for iOS under the platform of visionOS, and
+linked against the SDK of visionOS. Both run the same processor
+instructions, and the functions that these libraries call exist on both.
 
 Before every native build, the site is asked for those addresses on the
 JVM, and goes through the `main` of `nativeApp().walk(...)` when there is

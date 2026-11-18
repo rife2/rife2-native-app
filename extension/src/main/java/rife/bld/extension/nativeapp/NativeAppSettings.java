@@ -30,6 +30,7 @@ public class NativeAppSettings {
     private File androidSdk_;
     private File jdkLibraries_;
     private String simulator_ = "iPhone 17";
+    private String visionSimulator_ = "Apple Vision Pro";
 
     /**
      * The name of the library and of its framework, {@code site} for
@@ -310,5 +311,27 @@ public class NativeAppSettings {
      */
     public String simulator() {
         return simulator_;
+    }
+
+    /**
+     * The simulator that {@code native-check vision-sim} runs in.
+     *
+     * @param name the name of the simulator
+     * @return these settings
+     * @since 1.11.0
+     */
+    public NativeAppSettings visionSimulator(String name) {
+        visionSimulator_ = name;
+        return this;
+    }
+
+    /**
+     * The simulator that {@code native-check vision-sim} runs in.
+     *
+     * @return the simulator that {@code native-check vision-sim} runs in
+     * @since 1.11.0
+     */
+    public String visionSimulator() {
+        return visionSimulator_;
     }
 }

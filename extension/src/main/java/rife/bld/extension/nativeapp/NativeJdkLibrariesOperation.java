@@ -112,6 +112,9 @@ public class NativeJdkLibrariesOperation extends AbstractOperation<NativeJdkLibr
             "java_home", graalvm.home().getAbsolutePath(),
             "work", work.getAbsolutePath(),
             "tools", tools.getAbsolutePath()));
+        if (target_ == Target.VISION || target_ == Target.VISION_SIMULATOR) {
+            throw new IllegalArgumentException("visionOS takes the JDK libraries for iOS: native-jdk-libs " + (target_.isSimulator() ? "ios-sim" : "ios"));
+        }
         if (target_.isIos()) {
             environment.put("out", new File(libraries, target_ == Target.IOS ? "ios" : "iossim").getAbsolutePath());
             Commands.run(work, environment, List.of("bash", Resources.extract("build-ios-jdk-libs.sh", work).getAbsolutePath(),

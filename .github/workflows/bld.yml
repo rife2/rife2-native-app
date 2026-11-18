@@ -53,6 +53,9 @@ jobs:
       - name: Build the Swift package for iOS
         run: swift build --triple arm64-apple-ios17.0 --sdk "$(xcrun --sdk iphoneos --show-sdk-path)"
 
+      - name: Build the Swift package for visionOS
+        run: swift build --triple arm64-apple-xros26.0 --sdk "$(xcrun --sdk xros --show-sdk-path)"
+
       - name: Compile the classes for Android
         run: |
           platform=$(ls -d "$ANDROID_HOME"/platforms/android-* | sort -V | tail -1)

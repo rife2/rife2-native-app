@@ -122,7 +122,7 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
         Platform.requireMac();
         var built = switch (target_) {
             case MAC -> mac(graalvm, site, classpath, configuration, out);
-            case IOS, IOS_SIMULATOR -> ios(graalvm, site, classpath, configuration, out);
+            case IOS, IOS_SIMULATOR, VISION, VISION_SIMULATOR -> ios(graalvm, site, classpath, configuration, out);
             case ANDROID -> new Android(project_, settings_, graalvm).library(site, classpath, configuration, out);
         };
         if (!silent()) {
@@ -172,10 +172,9 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
     // native-image takes iOS as a target with the static libraries of the JDK for it
     private File ios(GraalVm graalvm, SiteOnJvm site, List<File> classpath, File configuration, File out)
     throws Exception {
-        var simulator = target_ == Target.IOS_SIMULATOR;
         var settings = settings_;
-        var triple = "arm64-apple-ios" + Apple.MINIMUM_IOS + (simulator ? "-simulator" : "");
-        var sdk = Commands.output(out, List.of("xcrun", "--sdk", simulator ? "iphonesimulator" : "iphoneos", "--show-sdk-path")).trim();
+        var triple = target_.triple();
+        var sdk = Commands.output(out, List.of("xcrun", "--sdk", target_.sdk(), "--show-sdk-path")).trim();
         var prepared = Apple.graalvmForIos(graalvm, settings.jdkLibraries(), target_, out);
 
         var name = site.libraryName();
@@ -191,7 +190,7 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
         var binary = new File(framework, name);
         Files.move(new File(out, "lib" + name + ".dylib").toPath(), binary.toPath());
         Commands.run(out, List.of("install_name_tool", "-id", "@rpath/" + name + ".framework/" + name, binary.getAbsolutePath()));
-        FileUtils.writeString(Apple.infoPlist(site, project_.version().toString(), simulator ? "iPhoneSimulator" : "iPhoneOS", Apple.MINIMUM_IOS),
+        FileUtils.writeString(Apple.infoPlist(site, project_.version().toString(), target_.bundlePlatform(), target_.minimum()),
             new File(framework, "Info.plist"));
         Apple.privacyManifest(settings, binary, new File(framework, "PrivacyInfo.xcprivacy"));
         Commands.run(out, List.of("codesign", "-f", "-s", "-", framework.getAbsolutePath()));

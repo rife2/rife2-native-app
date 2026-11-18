@@ -101,8 +101,8 @@ public class NativeCheckOperation extends AbstractOperation<NativeCheckOperation
         if (settings.addresses().isEmpty()) {
             throw new IllegalStateException("The build names no addresses to check: nativeApp().addresses(...)");
         }
-        if (target_ == Target.IOS) {
-            throw new IllegalArgumentException("A library for iOS devices is checked in the simulator: native-check ios-sim");
+        if (target_ == Target.IOS || target_ == Target.VISION) {
+            throw new IllegalArgumentException("A library for devices is checked in the simulator: native-check " + target_.argument() + "-sim");
         }
 
         Platform.requireMac();
@@ -120,9 +120,9 @@ public class NativeCheckOperation extends AbstractOperation<NativeCheckOperation
         var expected = site.ask(site.classpath(new File(out, "static")), new File(check, "jvm-data"), null);
         var got = switch (target_) {
             case MAC -> mac(site, out, check);
-            case IOS_SIMULATOR -> simulator(site, out, check);
+            case IOS_SIMULATOR, VISION_SIMULATOR -> simulator(site, out, check);
             case ANDROID -> android(graalvm, site, out, check);
-            case IOS -> throw new IllegalStateException();
+            case IOS, VISION -> throw new IllegalStateException();
         };
         if (!expected.equals(got)) {
             var said = new StringBuilder("The native library and the JVM answer differently, as the address, the status, the size and the CRC-32:\n");
@@ -167,7 +167,7 @@ public class NativeCheckOperation extends AbstractOperation<NativeCheckOperation
     private List<String> simulator(SiteOnJvm site, File out, File check)
     throws Exception {
         var settings = settings_;
-        var udid = simulator(settings.simulator(), check);
+        var udid = simulator(target_ == Target.VISION_SIMULATOR ? settings.visionSimulator() : settings.simulator(), check);
         // one that this boots is shut down again, one that was booted stays
         var booted = Commands.output(check, List.of("xcrun", "simctl", "list", "devices", "booted")).contains(udid);
         Commands.output(check, List.of("xcrun", "simctl", "bootstatus", udid, "-b"));
@@ -182,9 +182,9 @@ public class NativeCheckOperation extends AbstractOperation<NativeCheckOperation
 
     private List<String> simulator(SiteOnJvm site, File out, File check, String udid, NativeAppSettings settings)
     throws Exception {
-        var sdk = Commands.output(check, List.of("xcrun", "--sdk", "iphonesimulator", "--show-sdk-path")).trim();
+        var sdk = Commands.output(check, List.of("xcrun", "--sdk", target_.sdk(), "--show-sdk-path")).trim();
         var ask = new File(check, "ask");
-        Commands.run(check, List.of("xcrun", "--sdk", "iphonesimulator", "clang", "-O2", "-target", "arm64-apple-ios" + Apple.MINIMUM_IOS + "-simulator",
+        Commands.run(check, List.of("xcrun", "--sdk", target_.sdk(), "clang", "-O2", "-target", target_.triple(),
             "-isysroot", sdk, "-o", ask.getAbsolutePath(), Resources.extract("ask.c", check).getAbsolutePath(),
             "-I" + out.getAbsolutePath(), "-F" + out.getAbsolutePath(), "-framework", site.libraryName(), "-lz",
             "-Wl,-rpath," + out.getAbsolutePath()));

@@ -118,6 +118,8 @@ public final class NativeSite: @unchecked Sendable {
             if !isExtension {
                 #if os(macOS)
                 told["rife.nativeapp.platform"] = "mac"
+                #elseif os(visionOS)
+                told["rife.nativeapp.platform"] = "vision"
                 #else
                 told["rife.nativeapp.platform"] = "ios"
                 #endif

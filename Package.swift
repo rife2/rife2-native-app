@@ -7,7 +7,7 @@ import PackageDescription
 
 let package = Package(
     name: "RIFE2NativeApp",
-    platforms: [.iOS(.v17), .macOS(.v14)],
+    platforms: [.iOS(.v17), .macOS(.v14), .visionOS("26.0")],
     products: [
         .library(name: "RIFE2NativeApp", targets: ["RIFE2NativeApp"]),
     ],

@@ -149,6 +149,24 @@ class TestNativeApp {
     }
 
     @Test
+    void testVisionOsIsBuiltAsIos() {
+        assertEquals(Target.VISION_SIMULATOR, Target.from("vision-sim"));
+        assertEquals("vision", Target.VISION.platform());
+        assertTrue(Target.VISION.isIos());
+        assertEquals("arm64-apple-xros26.0", Target.VISION.triple());
+        assertEquals("arm64-apple-xros26.0-simulator", Target.VISION_SIMULATOR.triple());
+        assertEquals("arm64-apple-ios17.0-simulator", Target.IOS_SIMULATOR.triple());
+        assertEquals("xrsimulator", Target.VISION_SIMULATOR.sdk());
+        assertEquals("XROS", Target.VISION.bundlePlatform());
+        // the JDK libraries for iOS, under the platform of visionOS
+        assertEquals("ios", Target.VISION.jdkLibraries());
+        assertEquals("iossim", Target.VISION_SIMULATOR.jdkLibraries());
+        assertEquals("visionsim", Target.VISION_SIMULATOR.retagged());
+        var plist = Apple.infoPlist(site(new NativeAppSettings()), "1.0", Target.VISION.bundlePlatform(), Target.VISION.minimum());
+        assertTrue(plist.contains("<string>XROS</string>") && plist.contains("<key>MinimumOSVersion</key><string>26.0</string>"), plist);
+    }
+
+    @Test
     void testTargets() {
         assertEquals(Target.IOS_SIMULATOR, Target.from("ios-sim"));
         assertEquals(Target.ANDROID, Target.from("android"));

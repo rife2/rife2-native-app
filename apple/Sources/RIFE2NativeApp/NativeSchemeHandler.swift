@@ -6,7 +6,7 @@
 import Foundation
 import os
 import WebKit
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 import UIKit
 #endif
 

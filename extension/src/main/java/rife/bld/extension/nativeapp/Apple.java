@@ -18,9 +18,6 @@ import java.util.TreeSet;
 
 // what the frameworks for Apple's systems need
 final class Apple {
-    // what the JDK libraries for iOS and the Swift package are built for too
-    static final String MINIMUM_IOS = "17.0";
-
     private Apple() {
     }
 
@@ -60,7 +57,7 @@ final class Apple {
         var xcframework = new File(project.buildDirectory(), "native/" + name + ".xcframework");
         delete(xcframework);
         var command = new java.util.ArrayList<>(List.of("xcodebuild", "-create-xcframework"));
-        for (var target : List.of(Target.IOS, Target.IOS_SIMULATOR)) {
+        for (var target : List.of(Target.IOS, Target.IOS_SIMULATOR, Target.VISION, Target.VISION_SIMULATOR)) {
             var framework = new File(NativeLibraryOperation.directory(project, target), name + ".framework");
             if (framework.isDirectory()) {
                 command.addAll(List.of("-framework", framework.getAbsolutePath()));
@@ -145,9 +142,9 @@ final class Apple {
     // shares its files with the original until they change.
     static File graalvmForIos(GraalVm graalvm, File jdkLibraries, Target target, File out)
     throws IOException, InterruptedException {
-        var platform = target == Target.IOS ? "ios" : "iossim";
+        var platform = target.retagged();
         var runtime = graalvm.runtime();
-        var built = new File(jdkLibraries, runtime + "/" + platform);
+        var built = new File(jdkLibraries, runtime + "/" + target.jdkLibraries());
         var prepared = new File(out.getParentFile(), "graalvm-" + platform);
         // what native-jdk-libs left complete, it moves them in place at its end
         var libraries = new File(built, "clibraries/libjvm.a").isFile() ? "built " + new File(built, "static").lastModified() : "stand-ins";
@@ -162,11 +159,20 @@ final class Apple {
             var clibraries = new File(prepared, "lib/svm/clibraries/ios-aarch64");
             statics.mkdirs();
             clibraries.mkdirs();
-            if (!libraries.equals("stand-ins")) {
+            var retag = Resources.extract("retag.py", out);
+            if (!libraries.equals("stand-ins") && platform.equals(target.jdkLibraries())) {
                 FileUtils.copyDirectory(new File(built, "static"), statics);
                 FileUtils.copyDirectory(new File(built, "clibraries"), clibraries);
+            } else if (!libraries.equals("stand-ins")) {
+                // the ones for iOS, under the platform of visionOS
+                for (var kind : List.of("static", "clibraries")) {
+                    var into = kind.equals("static") ? statics : clibraries;
+                    var archives = new File(built, kind).listFiles((directory, name) -> name.endsWith(".a"));
+                    for (var library : archives == null ? new File[0] : archives) {
+                        standIn(library, new File(into, library.getName()), platform, retag);
+                    }
+                }
             } else {
-                var retag = Resources.extract("retag.py", out);
                 for (var library : List.of("java", "nio", "net", "zip", "extnet", "management", "management_ext", "prefs", "jaas")) {
                     standIn(new File(graalvm.home(), "lib/static/darwin-aarch64/lib" + library + ".a"), new File(statics, "lib" + library + ".a"), platform, retag);
                 }
@@ -178,7 +184,7 @@ final class Apple {
             FileUtils.writeString(libraries, stamp);
         }
         System.out.println("The JDK libraries for iOS: " + libraries.split(" ")[0] + ", for the JDK " + runtime);
-        if (target == Target.IOS && libraries.equals("stand-ins")) {
+        if (!target.isSimulator() && libraries.equals("stand-ins")) {
             System.err.println("Warning: this device build uses stand-ins, macOS code retagged for iOS. Build the real libraries with " +
                                "./bld native-jdk-libs ios before you ship it.");
         }

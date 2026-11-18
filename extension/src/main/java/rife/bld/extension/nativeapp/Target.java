@@ -14,6 +14,8 @@ public enum Target {
     MAC("mac"),
     IOS("ios"),
     IOS_SIMULATOR("ios-sim"),
+    VISION("vision"),
+    VISION_SIMULATOR("vision-sim"),
     ANDROID("android");
 
     private final String name_;
@@ -37,12 +39,65 @@ public enum Target {
         return switch (this) {
             case MAC -> "mac";
             case IOS, IOS_SIMULATOR -> "ios";
+            case VISION, VISION_SIMULATOR -> "vision";
             case ANDROID -> "android";
         };
     }
 
+    // built by native-image as for iOS, which visionOS isn't a target of but runs the same code as
     boolean isIos() {
-        return this == IOS || this == IOS_SIMULATOR;
+        return this == IOS || this == IOS_SIMULATOR || this == VISION || this == VISION_SIMULATOR;
+    }
+
+    boolean isSimulator() {
+        return this == IOS_SIMULATOR || this == VISION_SIMULATOR;
+    }
+
+    // the JDK libraries that native-jdk-libs builds for it, the ones for iOS on visionOS too
+    String jdkLibraries() {
+        return isSimulator() ? "iossim" : "ios";
+    }
+
+    // what retag.py writes into the object files of the JDK libraries for it
+    String retagged() {
+        return switch (this) {
+            case IOS -> "ios";
+            case IOS_SIMULATOR -> "iossim";
+            case VISION -> "vision";
+            case VISION_SIMULATOR -> "visionsim";
+            default -> throw new IllegalStateException();
+        };
+    }
+
+    String sdk() {
+        return switch (this) {
+            case IOS -> "iphoneos";
+            case IOS_SIMULATOR -> "iphonesimulator";
+            case VISION -> "xros";
+            case VISION_SIMULATOR -> "xrsimulator";
+            default -> throw new IllegalStateException();
+        };
+    }
+
+    // the oldest system that the library runs on, which retag.py and Package.swift say as well
+    String minimum() {
+        return this == VISION || this == VISION_SIMULATOR ? "26.0" : "17.0";
+    }
+
+    String triple() {
+        var system = this == VISION || this == VISION_SIMULATOR ? "xros" : "ios";
+        return "arm64-apple-" + system + minimum() + (isSimulator() ? "-simulator" : "");
+    }
+
+    // what the Info.plist of a framework for it says
+    String bundlePlatform() {
+        return switch (this) {
+            case IOS -> "iPhoneOS";
+            case IOS_SIMULATOR -> "iPhoneSimulator";
+            case VISION -> "XROS";
+            case VISION_SIMULATOR -> "XRSimulator";
+            default -> throw new IllegalStateException();
+        };
     }
 
     /**
@@ -59,6 +114,6 @@ public enum Target {
                 return target;
             }
         }
-        throw new IllegalArgumentException("No target is called " + name + ", these are: mac, ios, ios-sim, android");
+        throw new IllegalArgumentException("No target is called " + name + ", these are: mac, ios, ios-sim, vision, vision-sim, android");
     }
 }

@@ -33,7 +33,7 @@ public class NativeAppProject extends WebProject {
 
     private Target target() {
         if (arguments().isEmpty()) {
-            throw new IllegalArgumentException("Name what to build for: mac, ios, ios-sim or android");
+            throw new IllegalArgumentException("Name what to build for: mac, ios, ios-sim, vision, vision-sim or android");
         }
         return Target.from(arguments().remove(0));
     }
@@ -44,7 +44,7 @@ public class NativeAppProject extends WebProject {
      * @throws Exception when it can't be done
      * @since 1.11.0
      */
-    @BuildCommand(value = "native-library", summary = "Builds the site into a native library for an app: mac, ios, ios-sim or android")
+    @BuildCommand(value = "native-library", summary = "Builds the site into a native library for an app: mac, ios, ios-sim, vision, vision-sim or android")
     public void nativeLibrary()
     throws Exception {
         var target = target();
@@ -58,7 +58,7 @@ public class NativeAppProject extends WebProject {
      * @throws Exception when it can't be done
      * @since 1.11.0
      */
-    @BuildCommand(value = "native-check", summary = "Checks that the native library answers like the JVM: mac, ios-sim or android")
+    @BuildCommand(value = "native-check", summary = "Checks that the native library answers like the JVM: mac, ios-sim, vision-sim or android")
     public void nativeCheck()
     throws Exception {
         var target = target();

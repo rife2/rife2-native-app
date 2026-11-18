@@ -6,7 +6,7 @@
 import Foundation
 import SwiftUI
 import WebKit
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 import UIKit
 #else
 import AppKit
@@ -24,10 +24,13 @@ import AppKit
 /// leave the site, pages print and a stopped page loads again. An app
 /// extension, like a widget, uses ``NativeSite`` without this.
 @available(iOSApplicationExtension, unavailable)
+@available(visionOSApplicationExtension, unavailable)
 @available(macOSApplicationExtension, unavailable)
 open class NativePages: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     /// The path of the page that's shown.
     @Published public private(set) var path = ""
+    /// Whether there's a page to go back to.
+    @Published public private(set) var canGoBack = false
     /// The web view, made the first time it's asked for.
     public private(set) lazy var view: WKWebView = made()
     /// The site that answers the web view.
@@ -35,6 +38,7 @@ open class NativePages: NSObject, ObservableObject, WKNavigationDelegate, WKUIDe
     private let start: String
     private let saving = Saving()
     private var watched: NSKeyValueObservation?
+    private var backed: NSKeyValueObservation?
     private var reloaded: Date?
     // a reload that's owed, for when the app is in front again or after a while
     private var activated: NSObjectProtocol?
@@ -80,6 +84,12 @@ open class NativePages: NSObject, ObservableObject, WKNavigationDelegate, WKUIDe
             let path = view.url?.path ?? ""
             DispatchQueue.main.async {
                 self?.path = path
+            }
+        }
+        backed = view.observe(\.canGoBack, options: [.initial, .new]) { [weak self] view, _ in
+            let back = view.canGoBack
+            DispatchQueue.main.async {
+                self?.canGoBack = back
             }
         }
         // on this view, the lazy one isn't there until this returns
@@ -155,7 +165,7 @@ open class NativePages: NSObject, ObservableObject, WKNavigationDelegate, WKUIDe
         guard activated == nil && retry == nil else {
             return
         }
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         let active = UIApplication.didBecomeActiveNotification
         let inFront = UIApplication.shared.applicationState == .active
         #else
@@ -246,7 +256,7 @@ open class NativePages: NSObject, ObservableObject, WKNavigationDelegate, WKUIDe
     /// Opens an address outside of the site.
     @MainActor
     open func leave(to url: URL) async {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         await UIApplication.shared.open(url)
         #else
         NSWorkspace.shared.open(url)
@@ -255,7 +265,7 @@ open class NativePages: NSObject, ObservableObject, WKNavigationDelegate, WKUIDe
 
     /// Shows the print dialog for the page.
     open func printPage() {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         let job = UIPrintInfo(dictionary: nil)
         job.jobName = view.title ?? ""
         let dialog = UIPrintInteractionController.shared
@@ -279,6 +289,7 @@ open class NativePages: NSObject, ObservableObject, WKNavigationDelegate, WKUIDe
 
 // Hands the messages of the pages on without keeping the pages.
 @available(iOSApplicationExtension, unavailable)
+@available(visionOSApplicationExtension, unavailable)
 @available(macOSApplicationExtension, unavailable)
 private final class Handler: NSObject, WKScriptMessageHandler {
     private weak var pages: NativePages?
@@ -292,7 +303,7 @@ private final class Handler: NSObject, WKScriptMessageHandler {
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 // What a page saves goes to the sheet of iOS that saves and sends files.
 final class Saving: NSObject, WKDownloadDelegate {
     private var saved: [ObjectIdentifier: URL] = [:]
@@ -345,6 +356,7 @@ private extension UIViewController {
 
 /// The pages as a SwiftUI view.
 @available(iOSApplicationExtension, unavailable)
+@available(visionOSApplicationExtension, unavailable)
 public struct NativePagesView: UIViewRepresentable {
     /// The pages that this shows.
     public let pages: NativePages
