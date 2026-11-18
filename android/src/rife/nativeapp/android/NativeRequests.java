@@ -103,6 +103,19 @@ public class NativeRequests {
         saving_ = saving;
     }
 
+    // an address against the one it's said at, also of a scheme that java.net.URL doesn't know
+    static String resolved(String base, String location) {
+        try {
+            return java.net.URI.create(base).resolve(location).toString();
+        } catch (IllegalArgumentException e) {
+            try {
+                return new java.net.URL(new java.net.URL(base), location).toString();
+            } catch (java.net.MalformedURLException f) {
+                return null;
+            }
+        }
+    }
+
     // the answer that a download of the web view was made of, once
     NativeSite.Answer downloaded(String address) {
         return downloads_.remove(address);
@@ -161,11 +174,12 @@ public class NativeRequests {
         var page = request.isForMainFrame();
         var answer = NativeSite.ask(context_, address, request.getMethod(), lines.toString(), body);
         var disposition = answer.header("Content-Disposition");
-        if (page && null == answer.failure && disposition != null && disposition.toLowerCase(java.util.Locale.ROOT).startsWith("attachment")) {
+        if (page && null == answer.failure && answer.status >= 200 && answer.status < 300 && disposition != null && disposition.toLowerCase(java.util.Locale.ROOT).startsWith("attachment")) {
             // the web view only makes a download of what it can ask for again, so what's posted is saved here
             if (!request.getMethod().equalsIgnoreCase("GET") && saving_ != null) {
                 var type = answer.header("Content-Type");
-                saving_.save(android.webkit.URLUtil.guessFileName(address, disposition, type), type, answer.body);
+                var mime = null == type ? null : type.split(";")[0].trim();
+                saving_.save(android.webkit.URLUtil.guessFileName(address, disposition, mime), type, answer.body);
                 return new WebResourceResponse("text/plain", "UTF-8", 204, "No Content", Map.of("Cache-Control", "no-store"), new ByteArrayInputStream(new byte[0]));
             }
             downloads_.put(address, answer);
@@ -218,18 +232,15 @@ public class NativeRequests {
         // shows: followed here, the address would stay and the relative links
         // of the page would be wrong.
         if (page && status >= 300 && status < 400 && location != null) {
-            // a browser refuses to be sent to a script or to data, which would run as the site
-            String resolved;
-            try {
-                resolved = new java.net.URL(new java.net.URL(address), location).toString();
-            } catch (java.net.MalformedURLException e) {
-                resolved = "unusable:";
-            }
-            var scheme = Uri.parse(resolved).getScheme();
-            if (!resolved.startsWith(NativeSite.root(context_) + "/") && !"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
+            // A browser refuses to be sent to a script or to data, which would
+            // run as the site. What's checked is what the page is sent to,
+            // without what a browser leaves out of an address.
+            var resolved = resolved(address, location.replaceAll("[\\t\\r\\n]", "").replaceAll("^[\\x00-\\x20]+|[\\x00-\\x20]+$", ""));
+            var scheme = null == resolved ? null : Uri.parse(resolved).getScheme();
+            if (null == resolved || !resolved.startsWith(NativeSite.root(context_) + "/") && !"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
                 return new WebResourceResponse("text/plain", "UTF-8", 502, "Bad Gateway", Map.of("Cache-Control", "no-store"), new ByteArrayInputStream(new byte[0]));
             }
-            body = ("<!DOCTYPE html><script>location.replace(" + JSONObject.quote(location) + ")</script>").getBytes(StandardCharsets.UTF_8);
+            body = ("<!DOCTYPE html><script>location.replace(" + JSONObject.quote(resolved) + ")</script>").getBytes(StandardCharsets.UTF_8);
             headers.clear();
             headers.put("Content-Type", "text/html; charset=UTF-8");
             status = 200;
