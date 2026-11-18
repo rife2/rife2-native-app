@@ -4,6 +4,7 @@
  */
 package rife.bld.extension.nativeapp;
 
+import rife.bld.WebProject;
 import rife.bld.extension.NativeAppProject;
 import rife.bld.operations.AbstractOperation;
 import rife.tools.FileUtils;
@@ -25,19 +26,57 @@ import java.util.Map;
  * @since 1.11.0
  */
 public class NativeCheckOperation extends AbstractOperation<NativeCheckOperation> {
-    private NativeAppProject project_;
+    private WebProject project_;
+    private NativeAppSettings settings_;
     private Target target_;
 
     /**
-     * The project whose site this is for.
+     * The project whose site this is for, with its settings when it's a
+     * {@link NativeAppProject}.
      *
      * @param project the project
      * @return this operation
      * @since 1.11.0
      */
-    public NativeCheckOperation fromProject(NativeAppProject project) {
+    public NativeCheckOperation fromProject(WebProject project) {
         project_ = project;
+        if (project instanceof NativeAppProject app) {
+            settings_ = app.nativeApp();
+        }
         return this;
+    }
+
+    /**
+     * What the native library is, for a project that isn't a
+     * {@link NativeAppProject}.
+     *
+     * @param settings the settings
+     * @return this operation
+     * @since 1.11.0
+     */
+    public NativeCheckOperation settings(NativeAppSettings settings) {
+        settings_ = settings;
+        return this;
+    }
+
+    /**
+     * The settings of the native library.
+     *
+     * @return the settings; or {@code null} when none were given
+     * @since 1.11.0
+     */
+    public NativeAppSettings settings() {
+        return settings_;
+    }
+
+    /**
+     * The system that this is for.
+     *
+     * @return the target; or {@code null} when none was given
+     * @since 1.11.0
+     */
+    public Target target() {
+        return target_;
     }
 
     /**
@@ -56,8 +95,9 @@ public class NativeCheckOperation extends AbstractOperation<NativeCheckOperation
     public void execute()
     throws Exception {
         if (null == project_) throw new IllegalStateException("fromProject() wasn't given a project");
+        if (null == settings_) throw new IllegalStateException("settings() weren't given");
         if (null == target_) throw new IllegalStateException("target() wasn't given a target");
-        var settings = project_.nativeApp();
+        var settings = settings_;
         if (settings.addresses().isEmpty()) {
             throw new IllegalStateException("The build names no addresses to check: nativeApp().addresses(...)");
         }
@@ -105,7 +145,7 @@ public class NativeCheckOperation extends AbstractOperation<NativeCheckOperation
         for (var property : site.properties(data).entrySet()) {
             arguments.add("-D" + property.getKey() + "=" + property.getValue());
         }
-        arguments.addAll(project_.nativeApp().addresses());
+        arguments.addAll(settings_.addresses());
         return arguments;
     }
 
@@ -126,7 +166,7 @@ public class NativeCheckOperation extends AbstractOperation<NativeCheckOperation
     // a simulator runs a program of this Mac's disk, built for it, without an app around it
     private List<String> simulator(SiteOnJvm site, File out, File check)
     throws Exception {
-        var settings = project_.nativeApp();
+        var settings = settings_;
         var udid = simulator(settings.simulator(), check);
         // one that this boots is shut down again, one that was booted stays
         var booted = Commands.output(check, List.of("xcrun", "simctl", "list", "devices", "booted")).contains(udid);
@@ -172,7 +212,7 @@ public class NativeCheckOperation extends AbstractOperation<NativeCheckOperation
     // a program and the library go on the emulator or the device that adb sees
     private List<String> android(GraalVm graalvm, SiteOnJvm site, File out, File check)
     throws Exception {
-        var android = new Android(project_, graalvm);
+        var android = new Android(project_, settings_, graalvm);
         var adb = android.adb().getAbsolutePath();
         var name = site.libraryName();
         var ask = new File(check, "ask");

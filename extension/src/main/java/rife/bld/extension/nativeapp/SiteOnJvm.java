@@ -229,7 +229,7 @@ final class SiteOnJvm {
         // each side keeps what it keeps apart
         properties.put("rife.nativeapp.data", data.getAbsolutePath());
         // as ask.c asks for each answer, which an Android app does too
-        properties.put("rife.nativeapp.wholeAnswers", "true");
+        properties.put("rife.nativeapp.wholeResponses", "true");
         return properties;
     }
 

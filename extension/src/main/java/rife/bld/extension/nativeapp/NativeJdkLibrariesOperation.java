@@ -4,6 +4,7 @@
  */
 package rife.bld.extension.nativeapp;
 
+import rife.bld.WebProject;
 import rife.bld.extension.NativeAppProject;
 import rife.bld.operations.AbstractOperation;
 
@@ -23,19 +24,57 @@ import java.util.Map;
  * @since 1.11.0
  */
 public class NativeJdkLibrariesOperation extends AbstractOperation<NativeJdkLibrariesOperation> {
-    private NativeAppProject project_;
+    private WebProject project_;
+    private NativeAppSettings settings_;
     private Target target_;
 
     /**
-     * The project whose site this is for.
+     * The project whose site this is for, with its settings when it's a
+     * {@link NativeAppProject}.
      *
      * @param project the project
      * @return this operation
      * @since 1.11.0
      */
-    public NativeJdkLibrariesOperation fromProject(NativeAppProject project) {
+    public NativeJdkLibrariesOperation fromProject(WebProject project) {
         project_ = project;
+        if (project instanceof NativeAppProject app) {
+            settings_ = app.nativeApp();
+        }
         return this;
+    }
+
+    /**
+     * What the native library is, for a project that isn't a
+     * {@link NativeAppProject}.
+     *
+     * @param settings the settings
+     * @return this operation
+     * @since 1.11.0
+     */
+    public NativeJdkLibrariesOperation settings(NativeAppSettings settings) {
+        settings_ = settings;
+        return this;
+    }
+
+    /**
+     * The settings of the native library.
+     *
+     * @return the settings; or {@code null} when none were given
+     * @since 1.11.0
+     */
+    public NativeAppSettings settings() {
+        return settings_;
+    }
+
+    /**
+     * The system that this is for.
+     *
+     * @return the target; or {@code null} when none was given
+     * @since 1.11.0
+     */
+    public Target target() {
+        return target_;
     }
 
     /**
@@ -54,6 +93,7 @@ public class NativeJdkLibrariesOperation extends AbstractOperation<NativeJdkLibr
     public void execute()
     throws Exception {
         if (null == project_) throw new IllegalStateException("fromProject() wasn't given a project");
+        if (null == settings_) throw new IllegalStateException("settings() weren't given");
         if (null == target_) throw new IllegalStateException("target() wasn't given a target");
         if (target_ == Target.MAC) {
             throw new IllegalArgumentException("GraalVM has the JDK libraries for the Mac itself");
@@ -61,7 +101,7 @@ public class NativeJdkLibrariesOperation extends AbstractOperation<NativeJdkLibr
 
         Platform.requireMac();
         var graalvm = GraalVm.find();
-        var settings = project_.nativeApp();
+        var settings = settings_;
         var libraries = new File(settings.jdkLibraries(), graalvm.runtime());
         // the sources are fetched once, next to what's built of them
         var work = new File(settings.jdkLibraries().getParentFile(), "jdk-build");
@@ -77,7 +117,7 @@ public class NativeJdkLibrariesOperation extends AbstractOperation<NativeJdkLibr
             Commands.run(work, environment, List.of("bash", Resources.extract("build-ios-jdk-libs.sh", work).getAbsolutePath(),
                 target_ == Target.IOS ? "device" : "sim"));
         } else {
-            var android = new Android(project_, graalvm);
+            var android = new Android(project_, settings_, graalvm);
             environment.put("out", new File(libraries, "android").getAbsolutePath());
             environment.put("api", String.valueOf(settings.androidApi()));
             environment.put("toolchain", android.ndk().getAbsolutePath());

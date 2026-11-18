@@ -48,13 +48,13 @@ class TestNativeApp {
     void testChecksAreToldWhatTheAppTellsTheSite() {
         var ios = site(new NativeAppSettings()).properties(new File("data"));
         assertEquals("ios", ios.get("rife.nativeapp.platform"));
-        assertEquals("true", ios.get("rife.nativeapp.wholeAnswers"));
+        assertEquals("true", ios.get("rife.nativeapp.wholeResponses"));
         // as ask.c always asks
-        assertEquals("true", site(new NativeAppSettings().property("rife.nativeapp.wholeAnswers", "false")).properties(new File("data")).get("rife.nativeapp.wholeAnswers"));
+        assertEquals("true", site(new NativeAppSettings().property("rife.nativeapp.wholeResponses", "false")).properties(new File("data")).get("rife.nativeapp.wholeResponses"));
         var project = new WebProject();
         var android = new SiteOnJvm(project, new NativeAppSettings(), null, Target.ANDROID).properties(new File("data"));
         assertEquals("android", android.get("rife.nativeapp.platform"));
-        assertEquals("true", android.get("rife.nativeapp.wholeAnswers"));
+        assertEquals("true", android.get("rife.nativeapp.wholeResponses"));
         assertEquals("mac", new SiteOnJvm(project, new NativeAppSettings(), null, Target.MAC).properties(new File("data")).get("rife.nativeapp.platform"));
         // what the build says wins
         assertEquals("mac", site(new NativeAppSettings().property("rife.nativeapp.platform", "mac")).properties(new File("data")).get("rife.nativeapp.platform"));
@@ -124,6 +124,21 @@ class TestNativeApp {
         assertTrue(command.contains("-Drife.nativeapp.platform=ios"), command.toString());
         assertTrue(command.contains("-Drife.nativeapp.data=" + new File("walked").getAbsolutePath()), command.toString());
         assertEquals(List.of("com.example.Walk", "one"), command.subList(command.size() - 2, command.size()));
+    }
+
+    @Test
+    void testOperationsTakeAnyWebProject() {
+        var app = new rife.bld.extension.NativeAppProject();
+        assertSame(app.nativeApp(), new NativeLibraryOperation().fromProject(app).settings());
+        assertSame(app.nativeApp(), new NativeCheckOperation().fromProject(app).settings());
+        assertSame(app.nativeApp(), new NativeJdkLibrariesOperation().fromProject(app).settings());
+
+        var settings = new NativeAppSettings().libraryName("mysite");
+        var operation = new NativeLibraryOperation().fromProject(new WebProject()).settings(settings).target(Target.MAC);
+        assertSame(settings, operation.settings());
+        assertEquals(Target.MAC, operation.target());
+        var missing = assertThrows(IllegalStateException.class, () -> new NativeCheckOperation().fromProject(new WebProject()).target(Target.MAC).execute());
+        assertTrue(missing.getMessage().contains("settings()"), missing.getMessage());
     }
 
     @Test

@@ -4,6 +4,7 @@
  */
 package rife.bld.extension.nativeapp;
 
+import rife.bld.WebProject;
 import rife.bld.extension.NativeAppProject;
 import rife.bld.operations.AbstractOperation;
 import rife.tools.FileUtils;
@@ -24,19 +25,57 @@ import java.util.List;
  * @since 1.11.0
  */
 public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOperation> {
-    private NativeAppProject project_;
+    private WebProject project_;
+    private NativeAppSettings settings_;
     private Target target_;
 
     /**
-     * The project whose site this is for.
+     * The project whose site this is for, with its settings when it's a
+     * {@link NativeAppProject}.
      *
      * @param project the project
      * @return this operation
      * @since 1.11.0
      */
-    public NativeLibraryOperation fromProject(NativeAppProject project) {
+    public NativeLibraryOperation fromProject(WebProject project) {
         project_ = project;
+        if (project instanceof NativeAppProject app) {
+            settings_ = app.nativeApp();
+        }
         return this;
+    }
+
+    /**
+     * What the native library is, for a project that isn't a
+     * {@link NativeAppProject}.
+     *
+     * @param settings the settings
+     * @return this operation
+     * @since 1.11.0
+     */
+    public NativeLibraryOperation settings(NativeAppSettings settings) {
+        settings_ = settings;
+        return this;
+    }
+
+    /**
+     * The settings of the native library.
+     *
+     * @return the settings; or {@code null} when none were given
+     * @since 1.11.0
+     */
+    public NativeAppSettings settings() {
+        return settings_;
+    }
+
+    /**
+     * The system that this is for.
+     *
+     * @return the target; or {@code null} when none was given
+     * @since 1.11.0
+     */
+    public Target target() {
+        return target_;
     }
 
     /**
@@ -59,7 +98,7 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
      * @return the directory
      * @since 1.11.0
      */
-    public static File directory(NativeAppProject project, Target target) {
+    public static File directory(WebProject project, Target target) {
         return new File(project.buildDirectory(), "native/" + target.argument());
     }
 
@@ -67,10 +106,11 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
     public void execute()
     throws Exception {
         if (null == project_) throw new IllegalStateException("fromProject() wasn't given a project");
+        if (null == settings_) throw new IllegalStateException("settings() weren't given");
         if (null == target_) throw new IllegalStateException("target() wasn't given a target");
 
         var graalvm = GraalVm.find();
-        var site = new SiteOnJvm(project_, project_.nativeApp(), graalvm, target_);
+        var site = new SiteOnJvm(project_, settings_, graalvm, target_);
         site.requirePrecompiledTemplates();
         var out = directory(project_, target_);
         Commands.delete(out);
@@ -83,7 +123,7 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
         var built = switch (target_) {
             case MAC -> mac(graalvm, site, classpath, configuration, out);
             case IOS, IOS_SIMULATOR -> ios(graalvm, site, classpath, configuration, out);
-            case ANDROID -> new Android(project_, graalvm).library(site, classpath, configuration, out);
+            case ANDROID -> new Android(project_, settings_, graalvm).library(site, classpath, configuration, out);
         };
         if (!silent()) {
             System.out.println("Built " + built.getPath() + ", " + size(built));
@@ -121,7 +161,7 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
         Files.move(new File(out, "lib" + name + ".dylib").toPath(), binary.toPath());
         Commands.run(out, List.of("install_name_tool", "-id", "@rpath/" + name + ".framework/Versions/A/" + name, binary.getAbsolutePath()));
         FileUtils.writeString(Apple.infoPlist(site, project_.version().toString(), null, null), new File(version, "Resources/Info.plist"));
-        Apple.privacyManifest(project_.nativeApp(), binary, new File(version, "Resources/PrivacyInfo.xcprivacy"));
+        Apple.privacyManifest(settings_, binary, new File(version, "Resources/PrivacyInfo.xcprivacy"));
         Files.createSymbolicLink(new File(framework, "Versions/Current").toPath(), new File("A").toPath());
         Files.createSymbolicLink(new File(framework, name).toPath(), new File("Versions/Current/" + name).toPath());
         Files.createSymbolicLink(new File(framework, "Resources").toPath(), new File("Versions/Current/Resources").toPath());
@@ -133,7 +173,7 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
     private File ios(GraalVm graalvm, SiteOnJvm site, List<File> classpath, File configuration, File out)
     throws Exception {
         var simulator = target_ == Target.IOS_SIMULATOR;
-        var settings = project_.nativeApp();
+        var settings = settings_;
         var triple = "arm64-apple-ios" + Apple.MINIMUM_IOS + (simulator ? "-simulator" : "");
         var sdk = Commands.output(out, List.of("xcrun", "--sdk", simulator ? "iphonesimulator" : "iphoneos", "--show-sdk-path")).trim();
         var prepared = Apple.graalvmForIos(graalvm, settings.jdkLibraries(), target_, out);

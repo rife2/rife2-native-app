@@ -9,7 +9,7 @@
 #   checks/android/check.sh path/to/libsite.so [see:text|tap:text]...
 #
 # Needs the Android SDK of ANDROID_HOME, or of Android Studio on a Mac, with build-tools 35 and
-# platform 35, and a JDK.
+# platform 35, and a JDK. It downloads androidx.webkit the first time.
 set -euo pipefail
 
 if [ $# -lt 1 ]; then
@@ -30,14 +30,24 @@ out="$root/build/android-check"
 rm -rf "$out"
 mkdir -p "$out/classes" "$out/dex" "$out/apk/lib/arm64-v8a"
 
+# the library that the Android classes need beside Android's own, kept where every check finds it
+webkit="$HOME/.rife2/native-app/androidx/webkit-1.12.1.aar"
+if [ ! -f "$webkit" ]; then
+    mkdir -p "$(dirname "$webkit")"
+    curl -sfL -o "$webkit.partial" https://dl.google.com/android/maven2/androidx/webkit/webkit/1.12.1/webkit-1.12.1.aar
+    echo "18a0a51ad129e0c8563f031d46c8a7e61169f56ae84e562a0d75686941262111  $webkit.partial" | shasum -a 256 -c - > /dev/null
+    mv "$webkit.partial" "$webkit"
+fi
+unzip -o -q "$webkit" classes.jar -d "$out/webkit"
+
 sed "s/LIBRARY/$name/" "$here/AndroidManifest.xml" > "$out/AndroidManifest.xml"
 "$tools/aapt2" link -o "$out/app.apk" --manifest "$out/AndroidManifest.xml" -I "$platform"
-javac --release 17 -nowarn -cp "$platform" -d "$out/classes" "$root"/android/src/rife/nativeapp/android/*.java "$here"/src/rife/nativeapp/check/*.java
+javac --release 17 -nowarn -cp "$platform:$out/webkit/classes.jar" -d "$out/classes" "$root"/android/src/rife/nativeapp/android/*.java "$here"/src/rife/nativeapp/check/*.java
 classes=()
 while IFS= read -r class; do
     classes+=("$class")
 done < <(find "$out/classes" -name "*.class")
-"$tools/d8" --lib "$platform" --min-api 29 --output "$out/dex" "${classes[@]}"
+"$tools/d8" --lib "$platform" --min-api 29 --output "$out/dex" "${classes[@]}" "$out/webkit/classes.jar"
 cp "$library" "$out/apk/lib/arm64-v8a/"
 (cd "$out/dex" && zip -q ../app.apk classes.dex)
 (cd "$out/apk" && zip -q -r ../app.apk lib)

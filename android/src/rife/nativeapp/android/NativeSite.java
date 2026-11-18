@@ -155,7 +155,7 @@ public final class NativeSite {
                 if (app.versionName != null) {
                     told.put("rife.nativeapp.version", app.versionName);
                 }
-                told.put("rife.nativeapp.build", String.valueOf(app.getLongVersionCode()));
+                told.put("rife.nativeapp.buildNumber", String.valueOf(app.getLongVersionCode()));
             } catch (PackageManager.NameNotFoundException e) {
                 // the pages leave the version out
             }
@@ -163,7 +163,7 @@ public final class NativeSite {
             // a web view of Android takes an answer all at once, and the
             // bridge's memory for it only lasts while it's asked, so an app
             // can't say otherwise
-            told.put("rife.nativeapp.wholeAnswers", "true");
+            told.put("rife.nativeapp.wholeResponses", "true");
             var said = new byte[told.size() * 2][];
             var i = 0;
             for (var property : told.entrySet()) {

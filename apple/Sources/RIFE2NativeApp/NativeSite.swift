@@ -132,7 +132,7 @@ public final class NativeSite: @unchecked Sendable {
                 try? FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
                 told["rife.nativeapp.data"] = support.path
             }
-            for (name, key) in [("rife.nativeapp.version", "CFBundleShortVersionString"), ("rife.nativeapp.build", "CFBundleVersion")] {
+            for (name, key) in [("rife.nativeapp.version", "CFBundleShortVersionString"), ("rife.nativeapp.buildNumber", "CFBundleVersion")] {
                 if let value = Bundle.main.object(forInfoDictionaryKey: key) as? String {
                     told[name] = value
                 }

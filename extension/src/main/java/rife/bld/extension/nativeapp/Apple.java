@@ -55,7 +55,7 @@ final class Apple {
     // Xcode links one framework for the simulator and devices, made of the
     // frameworks that were built for each, the one that's there when only
     // one was
-    static void xcframework(rife.bld.extension.NativeAppProject project, String name)
+    static void xcframework(rife.bld.WebProject project, String name)
     throws IOException, InterruptedException {
         var xcframework = new File(project.buildDirectory(), "native/" + name + ".xcframework");
         delete(xcframework);

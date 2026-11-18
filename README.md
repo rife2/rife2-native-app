@@ -50,7 +50,7 @@ by a `rife.nativeapp.SiteProvider` instead, which the app names in
 public class MyApp implements SiteProvider {
     public Site site(HierarchicalProperties properties) {
         // an app extension isn't told a directory for what lasts
-        return new MySite(new File(properties.getValueString(NativeApp.DATA, "build/data")));
+        return new MySite(new File(properties.getValueString(NativeApp.DATA_PROPERTY, "build/data")));
     }
 }
 ```
@@ -64,8 +64,8 @@ arrives as properties, which a site can also read in its `setup()`:
 | `rife.nativeapp.data` | the directory where the app keeps what should last; the cookies of the site are kept there |
 | `rife.nativeapp.scheme`, `rife.nativeapp.host` | the address that the web view has the site at: `app://site` on Apple's systems and `https://<package>.invalid` on Android, unless the app says otherwise |
 | `rife.nativeapp.temp` | the directory for temporary files and uploads, when Java's own isn't one that the app may write in |
-| `rife.nativeapp.version`, `rife.nativeapp.build` | the version of the app and its build number |
-| `rife.nativeapp.wholeAnswers` | `true` when the app takes each answer all at once on the thread that asked, as on Android; a response that goes on after its request, like an event stream, then ends with it |
+| `rife.nativeapp.version`, `rife.nativeapp.buildNumber` | the version of the app and its build number |
+| `rife.nativeapp.wholeResponses` | `true` when the app takes each answer all at once on the thread that asked, as on Android; a response that goes on after its request, like an event stream, then ends with it |
 
 The cookies of the site are kept by its cookie jar, apart from the web
 view's: a cookie that a page's script sets in `document.cookie` doesn't
@@ -87,7 +87,7 @@ pages among them, from being served.
 A template includes this in its `<head>`, after its viewport `<meta>`:
 
 ```html
-<!--v context:nativeApp/-->
+<!--v context:nativeAppScript/-->
 ```
 
 In a browser, it's empty. Inside an app, it's the script of RIFE2's
@@ -187,7 +187,7 @@ The site's library for Android has the bridge of
 the app has the classes of `rife.nativeapp.android`. They aren't published
 as a library yet: an app copies `android/src` into its sources, or adds it
 to them in its Gradle build, here from a checkout of this repository beside
-the app's project. They're written for Java 17:
+the app's project. They're written for Java 17, and use `androidx.webkit`:
 
 ```groovy
 android {
@@ -198,6 +198,10 @@ android {
     sourceSets {
         main.java.srcDirs += "../../rife2-native-app/android/src"
     }
+}
+
+dependencies {
+    implementation "androidx.webkit:webkit:1.12.1"
 }
 ```
 
@@ -261,11 +265,15 @@ answers what's at a path all at once. A response that doesn't end, like an
 event stream, is cancelled when its request returns, since Android takes an
 answer all at once: an `EventSource` in a page gets nothing on Android.
 
-A subclass of `NativePages` adds a JavaScript interface of its own in
-`configure(WebView)`. Nothing but the site loads in the web view, since a
-page from elsewhere would reach the app's interfaces as well; an app whose
-pages show what's on the web allows it there with
-`setBlockNetworkLoads(false)`, which also needs the `INTERNET` permission. A
+A subclass of `NativePages` adds what's its own to the web view in
+`configure(WebView)`. The pages ask the app through an object that only the
+site's own frames get, so a frame of elsewhere or a sandboxed one can't, and
+the app checks where each message comes from. An interface that an app adds
+with `addJavascriptInterface` reaches every frame, so it's better added the
+same way, with `WebViewCompat.addWebMessageListener`. Nothing but the site
+loads in the web view; an app whose pages show what's on the web allows it
+there with `setBlockNetworkLoads(false)`, which also needs the `INTERNET`
+permission. A
 link out of the site goes to Android, except to a file, a content address
 or an intent. An app that opts into predictive back, with
 `android:enableOnBackInvokedCallback` or a target SDK that makes it the
@@ -340,6 +348,11 @@ in RIFE2's wiki describes, since a native image has no java agent.
 | `androidNdk(version)` | the version of the NDK in that SDK, `28.2.13676358` unless it's set |
 | `androidApi(level)` | the oldest Android that the library runs on, 29 unless it's set |
 | `jdkLibraries(directory)` | where `native-jdk-libs` keeps what it builds; `RIFE2_NATIVE_JDK_LIBS`, or `~/.rife2/native-app/jdk-libs`, when it's not set |
+
+A build that extends another class than `WebProject` uses the operations
+of the commands itself, `NativeLibraryOperation`, `NativeCheckOperation` and
+`NativeJdkLibrariesOperation`, with `fromProject(this)` and
+`settings(new NativeAppSettings()...)`.
 
 That adds three commands, which run on a Mac, for these targets:
 

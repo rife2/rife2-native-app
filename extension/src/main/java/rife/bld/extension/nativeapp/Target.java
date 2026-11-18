@@ -32,7 +32,7 @@ public enum Target {
         return name_;
     }
 
-    // what the app tells the site, see NativeApp.PLATFORM
+    // what the app tells the site, see NativeApp.PLATFORM_PROPERTY
     String platform() {
         return switch (this) {
             case MAC -> "mac";

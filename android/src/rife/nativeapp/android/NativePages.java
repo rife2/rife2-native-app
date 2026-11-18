@@ -18,7 +18,6 @@ import android.print.PrintAttributes;
 import android.print.PrintManager;
 import android.util.Base64;
 import android.util.Log;
-import android.webkit.JavascriptInterface;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.URLUtil;
 import android.webkit.ValueCallback;
@@ -29,6 +28,14 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.Toast;
+
+import androidx.webkit.JavaScriptReplyProxy;
+import androidx.webkit.WebMessageCompat;
+import androidx.webkit.WebViewCompat;
+import androidx.webkit.WebViewFeature;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -44,7 +51,7 @@ import java.util.concurrent.Executors;
  * <p>An activity calls {@link #start}, puts {@link #shown} on the screen and hands on
  * {@code onActivityResult}, {@code onSaveInstanceState}, the back button and
  * {@code onDestroy}. It adds what's its own by subclassing this, for
- * instance a JavaScript interface of its own in {@link #configure(WebView)}.
+ * instance a message listener of its own in {@link #configure(WebView)}.
  *
  * @author Geert Bevin (gbevin[remove] at uwyn dot com)
  * @since 1.11.0
@@ -144,11 +151,16 @@ public class NativePages {
         settings.setDomStorageEnabled(true);
         // a page keeps its size, as a screen of an app does
         settings.setSupportZoom(false);
-        // Nothing but the site loads in the web view, since the pages reach
-        // the app through their interface, and so would a page of elsewhere.
-        // An app whose pages show what's on the web allows it in configure().
+        // Nothing but the site loads in the web view. An app whose pages show
+        // what's on the web allows it in configure().
         settings.setBlockNetworkLoads(true);
-        view.addJavascriptInterface(new Asked(), "Rife2NativeApp");
+        // only the site's own frames get the object that reaches the app, not
+        // one of elsewhere or a sandboxed one, and the app checks who asks
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+            WebViewCompat.addWebMessageListener(view, "Rife2NativeApp", Set.of(NativeSite.root(activity)), this::asked);
+        } else {
+            Log.w("rife2", "This web view can't tell the app what a page asks, so pages can't print, share, save or post");
+        }
         view.setWebViewClient(new WebViewClient() {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
@@ -298,29 +310,30 @@ public class NativePages {
     }
 
     // what a page asks of the app through the script of the pages, on a thread of the web view
-    private final class Asked {
-        @JavascriptInterface
-        public void print() {
-            activity.runOnUiThread(() -> {
-                var title = null == view_.getTitle() ? "" : view_.getTitle();
-                ((PrintManager) activity.getSystemService(Context.PRINT_SERVICE)).print(title, view_.createPrintDocumentAdapter(title), new PrintAttributes.Builder().build());
-            });
+    // what a page asks of the app through the script of the pages, on the thread of the screen
+    private void asked(WebView view, WebMessageCompat message, Uri from, boolean mainFrame, JavaScriptReplyProxy reply) {
+        if (!NativeSite.own(activity, from) || null == message.getData()) {
+            return;
         }
-
-        @JavascriptInterface
-        public void share(String title, String url) {
-            activity.runOnUiThread(() -> activity.startActivity(Intent.createChooser(
-                new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_SUBJECT, title).putExtra(Intent.EXTRA_TEXT, url), null)));
-        }
-
-        @JavascriptInterface
-        public void save(String name, String type, String encoded) {
-            offer(name, type, Base64.decode(encoded, Base64.DEFAULT));
-        }
-
-        @JavascriptInterface
-        public String posted(String type, String encoded) {
-            return requests_.posted(type, Base64.decode(encoded, Base64.DEFAULT));
+        try {
+            var said = new JSONObject(message.getData());
+            switch (said.optString("action")) {
+                case "print" -> {
+                    var title = null == view.getTitle() ? "" : view.getTitle();
+                    ((PrintManager) activity.getSystemService(Context.PRINT_SERVICE)).print(title, view.createPrintDocumentAdapter(title), new PrintAttributes.Builder().build());
+                }
+                case "share" -> activity.startActivity(Intent.createChooser(new Intent(Intent.ACTION_SEND).setType("text/plain")
+                    .putExtra(Intent.EXTRA_SUBJECT, said.optString("title")).putExtra(Intent.EXTRA_TEXT, said.optString("url")), null));
+                case "save" -> offer(said.optString("name"), said.optString("type"), Base64.decode(said.optString("data"), Base64.DEFAULT));
+                case "posted" -> {
+                    var named = requests_.posted(said.optString("type"), Base64.decode(said.optString("data"), Base64.DEFAULT));
+                    reply.postMessage(new JSONObject().put("id", said.optLong("id")).put("name", named).toString());
+                }
+                default -> {
+                }
+            }
+        } catch (JSONException | IllegalArgumentException e) {
+            Log.w("rife2", "A page asked what isn't understood: " + e);
         }
     }
 

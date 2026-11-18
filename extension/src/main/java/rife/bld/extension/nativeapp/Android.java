@@ -4,7 +4,7 @@
  */
 package rife.bld.extension.nativeapp;
 
-import rife.bld.extension.NativeAppProject;
+import rife.bld.WebProject;
 import rife.tools.FileUtils;
 
 import java.io.File;
@@ -15,33 +15,35 @@ import java.util.List;
 
 // what building and checking for Android needs
 final class Android {
-    private final NativeAppProject project_;
+    private final WebProject project_;
+    private final NativeAppSettings settings_;
     private final GraalVm graalvm_;
 
-    Android(NativeAppProject project, GraalVm graalvm) {
+    Android(WebProject project, NativeAppSettings settings, GraalVm graalvm) {
         project_ = project;
+        settings_ = settings;
         graalvm_ = graalvm;
     }
 
     File ndk() {
-        return new File(project_.nativeApp().androidSdk(), "ndk/" + project_.nativeApp().androidNdk() + "/toolchains/llvm/prebuilt/darwin-x86_64");
+        return new File(settings_.androidSdk(), "ndk/" + settings_.androidNdk() + "/toolchains/llvm/prebuilt/darwin-x86_64");
     }
 
     File compiler()
     throws IOException {
-        var compiler = new File(ndk(), "bin/aarch64-linux-android" + project_.nativeApp().androidApi() + "-clang");
+        var compiler = new File(ndk(), "bin/aarch64-linux-android" + settings_.androidApi() + "-clang");
         if (!compiler.canExecute()) {
-            throw new IOException("No NDK " + project_.nativeApp().androidNdk() + " in " + project_.nativeApp().androidSdk() +
-                                  ": sdkmanager \"ndk;" + project_.nativeApp().androidNdk() + "\"");
+            throw new IOException("No NDK " + settings_.androidNdk() + " in " + settings_.androidSdk() +
+                                  ": sdkmanager \"ndk;" + settings_.androidNdk() + "\"");
         }
         return compiler;
     }
 
     File adb()
     throws IOException {
-        var adb = new File(project_.nativeApp().androidSdk(), "platform-tools/adb");
+        var adb = new File(settings_.androidSdk(), "platform-tools/adb");
         if (!adb.canExecute()) {
-            throw new IOException("No adb in " + project_.nativeApp().androidSdk() + ": sdkmanager platform-tools");
+            throw new IOException("No adb in " + settings_.androidSdk() + ": sdkmanager platform-tools");
         }
         return adb;
     }
@@ -49,7 +51,7 @@ final class Android {
     // the libraries of the JDK for Android and the answers about its C types, which native-jdk-libs makes
     File libraries()
     throws IOException {
-        var libraries = new File(project_.nativeApp().jdkLibraries(), graalvm_.runtime() + "/android");
+        var libraries = new File(settings_.jdkLibraries(), graalvm_.runtime() + "/android");
         if (!new File(libraries, "static").isDirectory() || !new File(libraries, "cap").isDirectory()) {
             throw new IOException("The JDK libraries for Android of the JDK " + graalvm_.runtime() + " aren't in " + libraries +
                                   " yet: ./bld native-jdk-libs android");

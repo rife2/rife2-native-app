@@ -17,7 +17,7 @@ import AppKit
 /// browser, files that a page saves are offered to save or share, a page can
 /// print, and a page that the system stopped drawing is loaded again.
 ///
-/// The pages know that they're in an app through the `context:nativeApp`
+/// The pages know that they're in an app through the `context:nativeAppScript`
 /// value of their templates. An app adds what's its own by subclassing this,
 /// for instance its own message handlers in ``configure(_:)``. A subclass
 /// that overrides a delegate method calls `super`'s, which is where links

@@ -68,7 +68,7 @@ int main(int argc, char** argv) {
         }
     }
     /* an answer that goes on after its request, an event stream, ends with it here */
-    rife2_property(thread, "rife.nativeapp.wholeAnswers", "true");
+    rife2_property(thread, "rife.nativeapp.wholeResponses", "true");
     int failed = 0;
     for (int i = 1; i < argc; i++) {
         if (strncmp(argv[i], "-D", 2) == 0) {
