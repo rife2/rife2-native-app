@@ -52,13 +52,13 @@ final class Apple {
     // Xcode links one framework for the simulator and devices, made of the
     // frameworks that were built for each, the one that's there when only
     // one was
-    static void xcframework(rife.bld.WebProject project, String name)
+    static void xcframework(rife.bld.WebProject project, NativeAppSettings settings, String name)
     throws IOException, InterruptedException {
-        var xcframework = new File(project.buildDirectory(), "native/" + name + ".xcframework");
+        var xcframework = new File(settings.destinationDirectory(project), name + ".xcframework");
         delete(xcframework);
         var command = new java.util.ArrayList<>(List.of("xcodebuild", "-create-xcframework"));
         for (var target : List.of(Target.IOS, Target.IOS_SIMULATOR, Target.VISION, Target.VISION_SIMULATOR)) {
-            var framework = new File(NativeLibraryOperation.directory(project, target), name + ".framework");
+            var framework = new File(NativeLibraryOperation.directory(project, settings, target), name + ".framework");
             if (framework.isDirectory()) {
                 command.addAll(List.of("-framework", framework.getAbsolutePath()));
             }

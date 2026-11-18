@@ -146,6 +146,12 @@ open class NativePages: NSObject, ObservableObject, WKNavigationDelegate, WKUIDe
     open func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
     }
 
+    open func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+    }
+
+    open func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+    }
+
     // The system stops what draws the pages when it needs the memory, which
     // leaves the web view empty. It's loaded again after this returns, since
     // a process that can't start calls this again from inside reload(). When

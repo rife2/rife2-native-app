@@ -31,6 +31,7 @@ public class NativeAppSettings {
     private File jdkLibraries_;
     private String simulator_ = "iPhone 17";
     private String visionSimulator_ = "Apple Vision Pro";
+    private File destinationDirectory_;
 
     /**
      * The name of the library and of its framework, {@code site} for
@@ -333,5 +334,44 @@ public class NativeAppSettings {
      */
     public String visionSimulator() {
         return visionSimulator_;
+    }
+
+    /**
+     * Where the libraries are built, a directory for each target and the
+     * xcframework beside them; {@code build/native} when it's not set, which
+     * {@code ./bld clean} removes. A relative directory is one of the
+     * project's.
+     *
+     * @param directory the directory
+     * @return these settings
+     * @since 1.11.0
+     */
+    public NativeAppSettings destinationDirectory(File directory) {
+        destinationDirectory_ = directory;
+        return this;
+    }
+
+    /**
+     * Where the libraries are built, when it was set.
+     *
+     * @return where the libraries are built, when it was set
+     * @since 1.11.0
+     */
+    public File destinationDirectory() {
+        return destinationDirectory_;
+    }
+
+    /**
+     * Where the libraries of a project are built.
+     *
+     * @param project the project
+     * @return the directory
+     * @since 1.11.0
+     */
+    public File destinationDirectory(rife.bld.WebProject project) {
+        if (null == destinationDirectory_) {
+            return new File(project.buildDirectory(), "native");
+        }
+        return destinationDirectory_.isAbsolute() ? destinationDirectory_ : new File(project.workDirectory(), destinationDirectory_.getPath());
     }
 }

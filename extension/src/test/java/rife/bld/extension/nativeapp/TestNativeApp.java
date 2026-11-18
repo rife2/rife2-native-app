@@ -167,6 +167,21 @@ class TestNativeApp {
     }
 
     @Test
+    void testLibrariesCanBeKeptOutOfClean(@TempDir Path temp) {
+        var project = new WebProject() {
+            {
+                workDirectory = temp.toFile();
+            }
+        };
+        var settings = new NativeAppSettings();
+        assertEquals(new File(project.buildDirectory(), "native/ios-sim"), NativeLibraryOperation.directory(project, settings, Target.IOS_SIMULATOR));
+        settings.destinationDirectory(new File("native"));
+        assertEquals(new File(temp.toFile(), "native/ios-sim"), NativeLibraryOperation.directory(project, settings, Target.IOS_SIMULATOR));
+        settings.destinationDirectory(temp.resolve("elsewhere").toFile());
+        assertEquals(temp.resolve("elsewhere/mac").toFile(), NativeLibraryOperation.directory(project, settings, Target.MAC));
+    }
+
+    @Test
     void testTargets() {
         assertEquals(Target.IOS_SIMULATOR, Target.from("ios-sim"));
         assertEquals(Target.ANDROID, Target.from("android"));

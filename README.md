@@ -55,6 +55,9 @@ public class MyApp implements SiteProvider {
 }
 ```
 
+A provider can also put properties of its own into those it's given, which
+the site then reads like the others.
+
 These are classes of RIFE2's `rife.nativeapp`. What the app tells the site
 arrives as properties, which a site can also read in its `setup()`:
 
@@ -165,7 +168,16 @@ shares the files that a page downloads, prints, and loads the page again
 when the system stopped what draws it. It publishes the `path` of the page
 that's shown and whether it `canGoBack`, for what the app shows around the
 pages. An app changes or adds to that by subclassing it, for instance to add
-its own message handlers in `configure(_:)`.
+its own message handlers in `configure(_:)`, or to say what happens when a
+page couldn't be loaded, in its `webView(_:didFail:withError:)` and
+`webView(_:didFailProvisionalNavigation:withError:)`.
+
+An app that's put together with `swiftc` rather than Xcode builds the
+package with `swift build --product RIFE2NativeApp -c release`, links the
+`libRIFE2NativeApp.a` that it writes to `.build/release` with the site's
+framework, and imports it with `-I .build/release` and
+`-I apple/Sources/CRIFE2NativeApp/include`, which has the module map of
+the C functions.
 
 `NativeSite.scheme`, `NativeSite.host` and `NativeSite.properties` are set
 before the first page, when the app wants another address than `app://site`
@@ -306,6 +318,9 @@ bld.extensions=com.uwyn.rife2:bld-native-app:1.11.0-SNAPSHOT
 bld.repositories=MAVEN_CENTRAL,RIFE2_SNAPSHOTS,RIFE2_RELEASES
 ```
 
+bld keeps the extension it resolved in `lib/bld/bld.cache`, so a newer
+snapshot of it is only taken once that file is deleted.
+
 Its build class extends `NativeAppProject` instead of `WebProject`. A native
 image can't compile templates while it runs, so the build precompiles them,
 and `app-library` stops when there are templates of a type that it
@@ -353,6 +368,7 @@ in RIFE2's wiki describes, since a native image has no java agent.
 | `androidNdk(version)` | the version of the NDK in that SDK, `28.2.13676358` unless it's set |
 | `androidApi(level)` | the oldest Android that the library runs on, 29 unless it's set |
 | `jdkLibraries(directory)` | where `app-jdk-libs` keeps what it builds; `RIFE2_NATIVE_JDK_LIBS`, or `~/.rife2/native-app/jdk-libs`, when it's not set |
+| `destinationDirectory(directory)` | where the libraries are built, a directory for each target and the xcframework beside them; `build/native` unless it's set, which `./bld clean` removes. A directory outside `build`, like `native`, keeps them across a clean build |
 
 A build that extends another subclass of `WebProject` than
 `NativeAppProject` uses the operations of the commands itself, in commands
@@ -377,7 +393,7 @@ That adds three commands, which run on a Mac, for these targets:
 
 | Command | What it does |
 |---|---|
-| `./bld app-library mac\|ios\|ios-sim\|vision\|vision-sim\|android` | builds `build/native/<target>/`: a framework for Apple's systems, with a privacy manifest that declares what its code uses, or a shared library for Android with the bridge linked in. For iOS and visionOS it also makes `build/native/<name>.xcframework` of the frameworks for their devices and simulators that were built, which Xcode links |
+| `./bld app-library mac\|ios\|ios-sim\|vision\|vision-sim\|android` | builds `build/native/<target>/`, or that folder of `destinationDirectory(...)`: a framework for Apple's systems, with a privacy manifest that declares what its code uses, or a shared library for Android with the bridge linked in. For iOS and visionOS it also makes `build/native/<name>.xcframework` of the frameworks for their devices and simulators that were built, which Xcode links |
 | `./bld app-check mac\|ios-sim\|vision-sim\|android` | asks the native library for the addresses of `nativeApp().addresses()`, on this Mac, in a simulator (which it boots and shuts down again when it wasn't running) or on what adb sees, and compares its answers with the JVM's |
 | `./bld app-jdk-libs ios\|ios-sim\|android` | builds the JDK libraries that iOS and Android need and GraalVM doesn't ship, once for every app on this Mac; `android` uses the sources that a run for iOS fetched |
 
@@ -394,7 +410,8 @@ reflection for a page. The site is told the platform of the target, as the
 app tells it, so pages include their script. An address that the site
 answers with a server error stops the build; a 404, like `/nothing-here`
 above, is checked like any other answer. An address whose answer changes
-each time, like a page with a CSRF token, can't be checked by
+each time, like a page with a CSRF token or one whose styles and scripts
+have `context:paramRandom` in their address, can't be checked by
 `app-check`, and is better left to the walk, as is an event stream,
 which the checks end with its request.
 

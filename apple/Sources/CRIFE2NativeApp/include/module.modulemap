@@ -1,0 +1,4 @@
+module CRIFE2NativeApp {
+    header "rife2_native_app.h"
+    export *
+}

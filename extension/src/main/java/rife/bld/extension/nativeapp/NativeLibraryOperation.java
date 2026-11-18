@@ -91,15 +91,17 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
     }
 
     /**
-     * The directory that the library of a target is built in.
+     * The directory that the library of a target is built in, in the
+     * destination directory of the settings.
      *
      * @param project the project of the site
+     * @param settings the settings of the native library
      * @param target the target
      * @return the directory
      * @since 1.11.0
      */
-    public static File directory(WebProject project, Target target) {
-        return new File(project.buildDirectory(), "native/" + target.argument());
+    public static File directory(WebProject project, NativeAppSettings settings, Target target) {
+        return new File(settings.destinationDirectory(project), target.argument());
     }
 
     @Override
@@ -112,7 +114,7 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
         var graalvm = GraalVm.find();
         var site = new SiteOnJvm(project_, settings_, graalvm, target_);
         site.requirePrecompiledTemplates();
-        var out = directory(project_, target_);
+        var out = directory(project_, settings_, target_);
         Commands.delete(out);
         out.mkdirs();
         var classpath = site.classpath(site.stage(out));
@@ -194,7 +196,7 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
             new File(framework, "Info.plist"));
         Apple.privacyManifest(settings, binary, new File(framework, "PrivacyInfo.xcprivacy"));
         Commands.run(out, List.of("codesign", "-f", "-s", "-", framework.getAbsolutePath()));
-        Apple.xcframework(project_, name);
+        Apple.xcframework(project_, settings_, name);
         return framework;
     }
 

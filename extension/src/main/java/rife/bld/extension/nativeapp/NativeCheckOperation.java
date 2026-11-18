@@ -108,7 +108,7 @@ public class NativeCheckOperation extends AbstractOperation<NativeCheckOperation
         Platform.requireMac();
         var graalvm = GraalVm.find();
         var site = new SiteOnJvm(project_, settings, graalvm, target_);
-        var out = NativeLibraryOperation.directory(project_, target_);
+        var out = NativeLibraryOperation.directory(project_, settings_, target_);
         var name = site.libraryName();
         if (!new File(out, target_ == Target.ANDROID ? "lib" + name + ".so" : name + ".framework").exists()) {
             throw new IllegalStateException("There's no library for " + target_.argument() + " in " + out + " yet: app-library " + target_.argument());
