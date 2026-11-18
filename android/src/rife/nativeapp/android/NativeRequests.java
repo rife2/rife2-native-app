@@ -93,6 +93,16 @@ public class NativeRequests {
     protected void handed(String method, String address, String type, byte[] body) {
     }
 
+    interface Saving {
+        void save(String name, String type, byte[] content);
+    }
+
+    private volatile Saving saving_;
+
+    void saving(Saving saving) {
+        saving_ = saving;
+    }
+
     // the answer that a download of the web view was made of, once
     NativeSite.Answer downloaded(String address) {
         return downloads_.remove(address);
@@ -151,7 +161,13 @@ public class NativeRequests {
         var page = request.isForMainFrame();
         var answer = NativeSite.ask(context_, address, request.getMethod(), lines.toString(), body);
         var disposition = answer.header("Content-Disposition");
-        if (page && disposition != null && disposition.toLowerCase(java.util.Locale.ROOT).startsWith("attachment")) {
+        if (page && null == answer.failure && disposition != null && disposition.toLowerCase(java.util.Locale.ROOT).startsWith("attachment")) {
+            // the web view only makes a download of what it can ask for again, so what's posted is saved here
+            if (!request.getMethod().equalsIgnoreCase("GET") && saving_ != null) {
+                var type = answer.header("Content-Type");
+                saving_.save(android.webkit.URLUtil.guessFileName(address, disposition, type), type, answer.body);
+                return new WebResourceResponse("text/plain", "UTF-8", 204, "No Content", Map.of("Cache-Control", "no-store"), new ByteArrayInputStream(new byte[0]));
+            }
             downloads_.put(address, answer);
         }
         // a page that's sent on is told so, see below; anything else, a file
@@ -176,7 +192,7 @@ public class NativeRequests {
         return text.replaceAll("[\\r\\n]+", " ");
     }
 
-    private static WebResourceResponse response(NativeSite.Answer answer, boolean page, String address) {
+    private WebResourceResponse response(NativeSite.Answer answer, boolean page, String address) {
         if (answer.failure != null) {
             Log.w("rife2", answer.failure);
             // a page that isn't there would leave the screen empty, so it says why instead
@@ -203,13 +219,14 @@ public class NativeRequests {
         // of the page would be wrong.
         if (page && status >= 300 && status < 400 && location != null) {
             // a browser refuses to be sent to a script or to data, which would run as the site
-            String scheme;
+            String resolved;
             try {
-                scheme = java.net.URI.create(address).resolve(location).getScheme();
-            } catch (IllegalArgumentException e) {
-                scheme = "unusable";
+                resolved = new java.net.URL(new java.net.URL(address), location).toString();
+            } catch (java.net.MalformedURLException e) {
+                resolved = "unusable:";
             }
-            if (scheme != null && !scheme.equalsIgnoreCase("http") && !scheme.equalsIgnoreCase("https")) {
+            var scheme = Uri.parse(resolved).getScheme();
+            if (!resolved.startsWith(NativeSite.root(context_) + "/") && !"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
                 return new WebResourceResponse("text/plain", "UTF-8", 502, "Bad Gateway", Map.of("Cache-Control", "no-store"), new ByteArrayInputStream(new byte[0]));
             }
             body = ("<!DOCTYPE html><script>location.replace(" + JSONObject.quote(location) + ")</script>").getBytes(StandardCharsets.UTF_8);

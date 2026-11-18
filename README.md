@@ -67,6 +67,10 @@ arrives as properties, which a site can also read in its `setup()`:
 | `rife.nativeapp.version`, `rife.nativeapp.build` | the version of the app and its build number |
 | `rife.nativeapp.wholeAnswers` | `true` when the app takes each answer all at once on the thread that asked, as on Android; a response that goes on after its request, like an event stream, then ends with it |
 
+The cookies of the site are kept by its cookie jar, apart from the web
+view's: a cookie that a page's script sets in `document.cookie` doesn't
+reach the site, and one that the site sets can't be read there.
+
 The site runs with `java.awt.headless` set to `true`, unless the app set it
 first. It has no display, and a native image on a Mac can only draw
 images, like the ones that RIFE2's content management scales, when it's
@@ -354,7 +358,8 @@ app tells it, so pages include their script. An address that the site
 answers with a server error stops the build; a 404, like `/nothing-here`
 above, is checked like any other answer. An address whose answer changes
 each time, like a page with a CSRF token, can't be checked by
-`native-check`, and is better left to the walk.
+`native-check`, and is better left to the walk, as is an event stream,
+which the checks end with its request.
 
 The walk is a class of the site's own sources, in `src/main/java`, which
 asks for what the app would, posts included. It's run with the properties

@@ -94,6 +94,7 @@ public class NativePages {
     public NativePages start(Bundle state) {
         if (view_ != null) throw new IllegalStateException("the pages already started");
         requests_ = requests();
+        requests_.saving(this::offer);
         view_ = made();
         if (null == state || null == view_.restoreState(state)) {
             view_.loadUrl(at_);

@@ -152,7 +152,9 @@ public final class NativeSite {
             told.put("rife.nativeapp.temp", context.getCacheDir().getPath());
             try {
                 var app = context.getPackageManager().getPackageInfo(context.getPackageName(), 0);
-                told.put("rife.nativeapp.version", String.valueOf(app.versionName));
+                if (app.versionName != null) {
+                    told.put("rife.nativeapp.version", app.versionName);
+                }
                 told.put("rife.nativeapp.build", String.valueOf(app.getLongVersionCode()));
             } catch (PackageManager.NameNotFoundException e) {
                 // the pages leave the version out
