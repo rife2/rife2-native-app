@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright 2026 Geert Bevin (gbevin[remove] at uwyn dot com)
+     Licensed under the Apache License, Version 2.0 (the "License") -->
 <!-- An app that only shows a site's native library with the classes of rife2-native-app, for
      check.sh. The library's name is the rife2.library meta-data, which check.sh fills in. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="rife.nativeapp.check">

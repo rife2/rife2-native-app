@@ -23,6 +23,9 @@ public class NativeAppProject extends WebProject {
 
     /**
      * What the native library is, and how it's checked.
+     *
+     * @return the settings of the native library
+     * @since 1.11.0
      */
     public NativeAppSettings nativeApp() {
         return nativeApp_;

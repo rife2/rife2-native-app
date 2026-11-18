@@ -38,7 +38,9 @@ public final class GraalVm {
     /**
      * Finds the GraalVM to build with.
      *
+     * @return the GraalVM
      * @throws IOException when there's none with native-image
+     * @since 1.11.0
      */
     public static GraalVm find()
     throws IOException {
@@ -75,6 +77,10 @@ public final class GraalVm {
     /**
      * The version of the JDK inside it, which the JDK libraries that are
      * built for iOS and Android belong to.
+     *
+     * @return the version of the JDK
+     * @throws IOException when GraalVM doesn't say it
+     * @since 1.11.0
      */
     public String runtime()
     throws IOException {

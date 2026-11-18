@@ -35,6 +35,16 @@ class TestNativeApp {
     }
 
     @Test
+    void testTargetOptionsComeBeforeTheClasspath(@TempDir Path temp) {
+        // without a configuration, which a site without addresses or a walk has none of
+        var command = NativeLibraryOperation.nativeImage(new File("native-image"), List.of("--target=ios-aarch64"),
+            List.of(new File("site.jar")), temp.resolve("config").toFile(), new File("libsite"));
+        var classpath = command.indexOf("-cp");
+        assertEquals(new File("site.jar").getAbsolutePath(), command.get(classpath + 1));
+        assertTrue(command.indexOf("--target=ios-aarch64") < classpath, command.toString());
+    }
+
+    @Test
     void testTargets() {
         assertEquals(Target.IOS_SIMULATOR, Target.from("ios-sim"));
         assertEquals(Target.ANDROID, Target.from("android"));

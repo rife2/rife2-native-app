@@ -55,8 +55,8 @@ public class MyApp implements SiteProvider {
 }
 ```
 
-These are classes of RIFE2's `rife.nativeapp`. What the app tells the site arrives as properties, which a site can also
-read in its `setup()`:
+These are classes of RIFE2's `rife.nativeapp`. What the app tells the site
+arrives as properties, which a site can also read in its `setup()`:
 
 | Property | What it is |
 |---|---|
@@ -86,10 +86,10 @@ A template includes this in its `<head>`, after its viewport `<meta>`:
 ```
 
 In a browser, it's empty. Inside an app, it's the script of RIFE2's
-`rife.nativeapp`, which
-marks the page with the classes `in-app` and `on-<platform>`, and does what
-a web view doesn't do by itself: printing, and on Android also sharing,
-saving a file and handing over what a page posts.
+`rife.nativeapp`, which marks the page with the classes `in-app` and
+`on-<platform>`, and does what a web view doesn't do by itself: printing,
+and on Android also sharing, saving a file and handing over what a page
+posts.
 
 ## The C functions
 
@@ -112,8 +112,9 @@ Texts are UTF-8 that ends with a zero, and headers are lines of a name, a
 colon and a value. A request tells the status and the headers once, the
 content as it's written, and once how it ended: 0 completed, 1 failed with
 why, or with `NULL` when there wasn't the memory to say why, 2 cancelled.
-A request that the site couldn't handle at all is only told that it failed. Nothing comes after the end, so that's where the app
-lets go of its context. The text of a failure is only the app's during the
+A request that the site couldn't handle at all is only told that it
+failed. Nothing comes after the end, so that's where the app lets go of
+its context. The text of a failure is only the app's during the
 call. Each request has a number that no request had before, which
 `rife2_cancel` takes; a cancel can come before its request.
 `rife2_abi` answers 1 and changes when these signatures do.

@@ -53,6 +53,11 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
 
     /**
      * The directory that the library of a target is built in.
+     *
+     * @param project the project of the site
+     * @param target the target
+     * @return the directory
+     * @since 1.11.0
      */
     public static File directory(NativeAppProject project, Target target) {
         return new File(project.buildDirectory(), "native/" + target.argument());
@@ -90,8 +95,9 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
         return file.length() / (1024 * 1024) + " MB";
     }
 
-    private List<String> nativeImage(File tool, List<File> classpath, File configuration, File library) {
+    static List<String> nativeImage(File tool, List<String> options, List<File> classpath, File configuration, File library) {
         var command = new ArrayList<>(List.of(tool.getAbsolutePath(), "--shared", "-H:+UnlockExperimentalVMOptions"));
+        command.addAll(options);
         if (configuration.isDirectory()) {
             command.add("-H:ConfigurationFileDirectories=" + configuration.getAbsolutePath());
         }
@@ -103,7 +109,7 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
     private File mac(GraalVm graalvm, SiteOnJvm site, List<File> classpath, File configuration, File out)
     throws Exception {
         var name = site.libraryName();
-        Commands.run(project_.workDirectory(), nativeImage(graalvm.tool("native-image"), classpath, configuration, new File(out, "lib" + name)));
+        Commands.run(project_.workDirectory(), nativeImage(graalvm.tool("native-image"), List.of(), classpath, configuration, new File(out, "lib" + name)));
         removeDesktopLibraries(out, name);
 
         // as a Mac has frameworks: with its versions in a folder, and links to the one that's current
@@ -132,10 +138,9 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
         var prepared = Apple.graalvmForIos(graalvm, settings.jdkLibraries(), target_, out);
 
         var name = site.libraryName();
-        var command = nativeImage(new File(prepared, "bin/native-image"), classpath, configuration, new File(out, "lib" + name));
-        command.addAll(4, List.of("--target=ios-aarch64",
+        var command = nativeImage(new File(prepared, "bin/native-image"), List.of("--target=ios-aarch64",
             "-H:NativeLinkerOption=-target", "-H:NativeLinkerOption=" + triple,
-            "-H:NativeLinkerOption=-isysroot", "-H:NativeLinkerOption=" + sdk));
+            "-H:NativeLinkerOption=-isysroot", "-H:NativeLinkerOption=" + sdk), classpath, configuration, new File(out, "lib" + name));
         Commands.run(project_.workDirectory(), command);
         removeDesktopLibraries(out, name);
 

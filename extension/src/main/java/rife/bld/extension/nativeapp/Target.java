@@ -24,6 +24,9 @@ public enum Target {
 
     /**
      * The name of the target as a command takes it.
+     *
+     * @return the name
+     * @since 1.11.0
      */
     public String argument() {
         return name_;
@@ -36,7 +39,10 @@ public enum Target {
     /**
      * The target that a command names.
      *
+     * @param name the name of the target
+     * @return the target
      * @throws IllegalArgumentException for a name of no target
+     * @since 1.11.0
      */
     public static Target from(String name) {
         for (var target : values()) {
