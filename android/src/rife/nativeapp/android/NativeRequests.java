@@ -105,12 +105,25 @@ public class NativeRequests {
 
     // an address against the one it's said at, also of a scheme that java.net.URL doesn't know
     static String resolved(String base, String location) {
+        // where Java follows an older rule than a browser: the same page, with another query or fragment
+        var fragment = base.indexOf('#');
+        var page = fragment < 0 ? base : base.substring(0, fragment);
+        if (location.isEmpty()) {
+            return page;
+        }
+        if (location.startsWith("#")) {
+            return page + location;
+        }
+        if (location.startsWith("?")) {
+            var query = page.indexOf('?');
+            return (query < 0 ? page : page.substring(0, query)) + location;
+        }
         try {
-            return java.net.URI.create(base).resolve(location).toString();
-        } catch (IllegalArgumentException e) {
+            return new java.net.URL(new java.net.URL(base), location).toString();
+        } catch (java.net.MalformedURLException e) {
             try {
-                return new java.net.URL(new java.net.URL(base), location).toString();
-            } catch (java.net.MalformedURLException f) {
+                return java.net.URI.create(base).resolve(location).toString();
+            } catch (IllegalArgumentException f) {
                 return null;
             }
         }
@@ -178,7 +191,7 @@ public class NativeRequests {
             // the web view only makes a download of what it can ask for again, so what's posted is saved here
             if (!request.getMethod().equalsIgnoreCase("GET") && saving_ != null) {
                 var type = answer.header("Content-Type");
-                var mime = null == type ? null : type.split(";")[0].trim();
+                var mime = null == type ? null : type.split(";", 2)[0].trim();
                 saving_.save(android.webkit.URLUtil.guessFileName(address, disposition, mime), type, answer.body);
                 return new WebResourceResponse("text/plain", "UTF-8", 204, "No Content", Map.of("Cache-Control", "no-store"), new ByteArrayInputStream(new byte[0]));
             }
@@ -240,13 +253,14 @@ public class NativeRequests {
             if (null == resolved || !resolved.startsWith(NativeSite.root(context_) + "/") && !"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
                 return new WebResourceResponse("text/plain", "UTF-8", 502, "Bad Gateway", Map.of("Cache-Control", "no-store"), new ByteArrayInputStream(new byte[0]));
             }
-            body = ("<!DOCTYPE html><script>location.replace(" + JSONObject.quote(resolved) + ")</script>").getBytes(StandardCharsets.UTF_8);
+            // a < in the address would otherwise be read as markup by the page
+            body = ("<!DOCTYPE html><script>location.replace(" + JSONObject.quote(resolved).replace("<", "\\u003c") + ")</script>").getBytes(StandardCharsets.UTF_8);
             headers.clear();
             headers.put("Content-Type", "text/html; charset=UTF-8");
             status = 200;
         }
         var type = header(headers, "Content-Type");
-        var mime = null == type ? "application/octet-stream" : type.split(";")[0].trim();
+        var mime = null == type ? "application/octet-stream" : type.split(";", 2)[0].trim();
         String charset = null;
         if (type != null) {
             for (var parameter : type.split(";")) {
