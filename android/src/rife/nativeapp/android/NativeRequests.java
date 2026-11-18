@@ -35,7 +35,7 @@ public class NativeRequests {
     static final String POSTED_HEADER = "X-Rife2-Body";
     static final String POSTED_PARAMETER = "rife2-body";
     // how many posts are kept for a request that names them: one that never comes mustn't stay forever
-    private static final int POSTS_KEPT = 16;
+    private static final int POSTS_KEPT = 64;
     // how far the app follows what isn't a page when the site sends it on
     private static final int REDIRECTS = 5;
 
@@ -165,7 +165,7 @@ public class NativeRequests {
             address = url.buildUpon().encodedQuery(query.length() == 0 ? null : query.toString()).build().toString();
         }
         var posted = null == named ? null : posted_.remove(named);
-        if (named != null && null == posted) {
+        if (named != null && !named.isEmpty() && null == posted) {
             Log.w("rife2", "What " + address + " posts was handed over too long ago, it goes without it");
         }
         if (posted != null && !posted.type().isEmpty()) {

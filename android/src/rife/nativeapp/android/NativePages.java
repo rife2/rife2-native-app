@@ -278,10 +278,7 @@ public class NativePages {
     /** Shows the page at a path of the site. */
     public void go(String path) {
         // without the slash, the path would be part of the host
-        if (!path.startsWith("/")) {
-            return;
-        }
-        view().loadUrl(NativeSite.root(activity) + path);
+        view().loadUrl(NativeSite.root(activity) + (path.startsWith("/") ? path : "/" + path));
     }
 
     /** Shows the page at an address of the site; one of elsewhere isn't shown. */
@@ -310,6 +307,8 @@ public class NativePages {
         shown.removeAllViews();
         if (view_ != null) {
             view_.destroy();
+            // a reload that's still to come leaves it alone
+            view_ = null;
         }
     }
 

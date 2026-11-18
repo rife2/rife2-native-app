@@ -169,7 +169,7 @@ public final class NativeSchemeHandler: NSObject, WKURLSchemeHandler {
             if (300...399).contains(status),
                let said = headers.first(where: { $0.name.caseInsensitiveCompare("Location") == .orderedSame })?.value,
                let location = URL(string: said, relativeTo: base)?.absoluteString {
-                let own = location.hasPrefix(root + "/") || location == root
+                let own = location.lowercased().hasPrefix(root.lowercased() + "/") || location.lowercased() == root.lowercased()
                 // a browser refuses to be sent to a script or to data, which would run as the site
                 guard own || ["http", "https"].contains(URL(string: location)?.scheme?.lowercased() ?? "") else {
                     respond(502, [:])

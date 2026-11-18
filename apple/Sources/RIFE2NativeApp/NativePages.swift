@@ -103,7 +103,7 @@ open class NativePages: NSObject, ObservableObject, WKNavigationDelegate, WKUIDe
     /// Shows the page at a path of the site.
     public func go(_ path: String) {
         // without the slash, the path would be part of the host
-        guard path.hasPrefix("/"), let url = URL(string: site.root + path) else {
+        guard let url = URL(string: site.root + (path.hasPrefix("/") ? path : "/" + path)) else {
             return
         }
         settle()
@@ -304,7 +304,7 @@ final class Saving: NSObject, WKDownloadDelegate {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         // only a name, so that the folder above it is the one made here, which goes once it's saved
         let name = (suggestedFilename as NSString).lastPathComponent
-        let file = folder.appendingPathComponent(["", ".", ".."].contains(name) ? "download" : name)
+        let file = folder.appendingPathComponent(["", ".", "..", "/"].contains(name) ? "download" : name)
         saved[ObjectIdentifier(download)] = file
         return file
     }
