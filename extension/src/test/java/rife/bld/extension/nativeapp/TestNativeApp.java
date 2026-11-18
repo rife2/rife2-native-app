@@ -149,6 +149,11 @@ class TestNativeApp {
     }
 
     @Test
+    void testMacLibraryRunsOnTheOldestMacOfThePackage() {
+        assertEquals(List.of("-H:NativeLinkerOption=-mmacosx-version-min=14.0"), NativeLibraryOperation.macOptions());
+    }
+
+    @Test
     void testVisionOsIsBuiltAsIos() {
         assertEquals(Target.VISION_SIMULATOR, Target.from("vision-sim"));
         assertEquals("vision", Target.VISION.platform());

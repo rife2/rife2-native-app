@@ -221,6 +221,13 @@ dependencies {
 }
 ```
 
+An app that's built without Gradle compiles these classes against the
+`classes.jar` of the webkit aar, with `androidx.annotation` on the classpath
+too, or javac warns that it can't find `RestrictTo$Scope`. If such a build
+checks its dex for calls that are newer than its oldest Android, it should
+check the webkit classes apart: they call newer APIs behind their own
+version checks, which lint knows about but a plain scan doesn't.
+
 The app puts `build/native/android/libmysite.so` in its `jniLibs/arm64-v8a`,
 needs API level 29 or later, and an activity shows the site with:
 

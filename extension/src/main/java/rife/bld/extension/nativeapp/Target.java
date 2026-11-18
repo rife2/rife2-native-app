@@ -81,7 +81,11 @@ public enum Target {
 
     // the oldest system that the library runs on, which retag.py and Package.swift say as well
     String minimum() {
-        return this == VISION || this == VISION_SIMULATOR ? "26.0" : "17.0";
+        return switch (this) {
+            case MAC -> "14.0";
+            case VISION, VISION_SIMULATOR -> "26.0";
+            default -> "17.0";
+        };
     }
 
     String triple() {

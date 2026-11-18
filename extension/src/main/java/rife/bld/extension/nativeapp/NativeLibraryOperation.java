@@ -148,11 +148,16 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
         return command;
     }
 
+    // without it, the library needs the macOS of the machine that built it
+    static List<String> macOptions() {
+        return List.of("-H:NativeLinkerOption=-mmacosx-version-min=" + Target.MAC.minimum());
+    }
+
     // a Mac is what GraalVM builds for by itself, with the libraries of the JDK that it ships
     private File mac(GraalVm graalvm, SiteOnJvm site, List<File> classpath, File configuration, File out)
     throws Exception {
         var name = site.libraryName();
-        Commands.run(project_.workDirectory(), nativeImage(graalvm.tool("native-image"), List.of(), classpath, configuration, new File(out, "lib" + name)));
+        Commands.run(project_.workDirectory(), nativeImage(graalvm.tool("native-image"), macOptions(), classpath, configuration, new File(out, "lib" + name)));
         removeDesktopLibraries(out, name);
 
         // as a Mac has frameworks: with its versions in a folder, and links to the one that's current
