@@ -16,6 +16,8 @@ import java.util.regex.Pattern;
 
 // the site of a project as native-image and the JVM see it
 final class SiteOnJvm {
+    // as the site runs inside an app, see NativeApp
+    private static final String HEADLESS = "-Djava.awt.headless=true";
     private static final Pattern ANSWER = Pattern.compile("^(.*) -> (-?\\d+) .*, (\\d+) bytes with checksum (\\d+) in .*$");
 
     private final WebProject project_;
@@ -107,7 +109,7 @@ final class SiteOnJvm {
         Commands.delete(configuration);
         var agent = "-agentlib:native-image-agent=config-merge-dir=" + configuration.getAbsolutePath();
         if (settings_.walkClass() != null) {
-            var command = new ArrayList<>(List.of(graalvm_.tool("java").getAbsolutePath(), agent, "-cp", joined(classpath), settings_.walkClass()));
+            var command = new ArrayList<>(List.of(graalvm_.tool("java").getAbsolutePath(), agent, HEADLESS, "-cp", joined(classpath), settings_.walkClass()));
             command.addAll(settings_.walkArguments());
             Commands.run(project_.workDirectory(), command);
         }
@@ -127,7 +129,7 @@ final class SiteOnJvm {
     throws IOException, InterruptedException {
         Commands.delete(data);
         data.mkdirs();
-        var command = new ArrayList<>(List.of(graalvm_.tool("java").getAbsolutePath()));
+        var command = new ArrayList<>(List.of(graalvm_.tool("java").getAbsolutePath(), HEADLESS));
         if (agent != null) {
             command.add(agent);
         }

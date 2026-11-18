@@ -409,6 +409,37 @@ class TestNativeApp {
     }
 
     @Test
+    void testHeadless() {
+        var previous = System.getProperty("java.awt.headless");
+        try {
+            System.clearProperty("java.awt.headless");
+            var app = new NativeApp(new Site() {
+                public void setup() {
+                    get("/headless", c -> c.print(java.awt.GraphicsEnvironment.isHeadless()));
+                }
+            });
+            assertEquals("true", ask(app, "/headless").text());
+            app.stop();
+
+            // what an app said first stays
+            System.setProperty("java.awt.headless", "false");
+            var told = new NativeApp(new Site() {
+                public void setup() {
+                }
+            });
+            told.runner();
+            assertEquals("false", System.getProperty("java.awt.headless"));
+            told.stop();
+        } finally {
+            if (null == previous) {
+                System.clearProperty("java.awt.headless");
+            } else {
+                System.setProperty("java.awt.headless", previous);
+            }
+        }
+    }
+
+    @Test
     void testMain() {
         var out = System.out;
         var said = new ByteArrayOutputStream();

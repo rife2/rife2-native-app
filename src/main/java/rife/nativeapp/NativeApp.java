@@ -169,6 +169,12 @@ public class NativeApp {
         }
         if (null == runner_) {
             try {
+                // A site inside an app has no display, and images are drawn
+                // without one, the only way that a native image on a Mac draws
+                // them; an app that wants otherwise says so first.
+                if (null == System.getProperty("java.awt.headless")) {
+                    System.setProperty("java.awt.headless", "true");
+                }
                 var properties = new HierarchicalProperties();
                 properties_.forEach(properties::put);
                 var temp = properties_.get(TEMP);

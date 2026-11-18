@@ -51,6 +51,10 @@ read in its `setup()`:
 | `rife.nativeapp.version`, `rife.nativeapp.build` | the version of the app |
 | `rife.nativeapp.wholeAnswers` | `true` when the app takes each answer all at once on the thread that asked, as on Android; a response that goes on after its request, like an event stream, then ends with it |
 
+The site runs with `java.awt.headless` set to `true`, unless the app set it
+first: it has no display, and a native image on a Mac only draws images,
+like the ones that RIFE2's content management scales, without one.
+
 The scripts, styles and images of the site are served from the classpath
 directory `webapp`, which is where the native build puts `src/main/webapp`.
 They're only served for an address that no route of the site takes, so a
