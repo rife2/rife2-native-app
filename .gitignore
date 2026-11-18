@@ -8,7 +8,6 @@
 /lib/runtime/
 /lib/standalone/
 /lib/test/
-/.idea/
 /.build/
 /.swiftpm/
 /extension/build/
@@ -22,3 +21,6 @@
 /extension/lib/test/
 /local.properties
 /extension/local.properties
+.idea/**/usage.statistics.xml
+.idea/**/dictionaries
+.idea/**/tasks.xml

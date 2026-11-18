@@ -1,0 +1,76 @@
+name: bld-ci
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  build-library:
+    timeout-minutes: 30
+
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
+        java-version: [ 17, 21, 25, 26 ]
+
+    runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Configure git line endings
+        run: git config --global core.autocrlf input
+
+      - name: Checkout source repository
+        uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 0
+
+      - name: Set up JDK ${{ matrix.java-version }}
+        uses: actions/setup-java@v6
+        with:
+          distribution: 'corretto'
+          java-version: ${{ matrix.java-version }}
+          check-latest: true
+
+      - name: Compile source
+        run: ./bld clean download compile
+
+      - name: Run tests
+        run: ./bld test
+
+  # the extension only builds on a Mac, its tests also run on Linux
+  build-extension:
+    timeout-minutes: 30
+
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, macos-latest ]
+        java-version: [ 17, 21, 25, 26 ]
+
+    runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        working-directory: extension
+
+    steps:
+      - name: Checkout source repository
+        uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 0
+
+      - name: Set up JDK ${{ matrix.java-version }}
+        uses: actions/setup-java@v6
+        with:
+          distribution: 'corretto'
+          java-version: ${{ matrix.java-version }}
+          check-latest: true
+
+      - name: Compile source
+        run: ./bld clean download compile
+
+      - name: Run tests
+        run: ./bld test

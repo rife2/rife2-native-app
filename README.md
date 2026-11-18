@@ -1,3 +1,11 @@
+[![License](https://img.shields.io/badge/license-Apache%20License%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Java](https://img.shields.io/badge/java-17%2B-blue)](https://www.oracle.com/java/technologies/javase/jdk17-archive-downloads.html)
+[![bld](https://img.shields.io/badge/3.0.1-FA9052?label=bld&labelColor=2392FF)](https://rife2.com/bld)
+[![Release](https://img.shields.io/github/release/rife2/rife2-native-app.svg)](https://github.com/rife2/rife2-native-app/releases/latest)
+[![Maven Central](https://img.shields.io/maven-central/v/com.uwyn.rife2/rife2-native-app)](https://central.sonatype.com/artifact/com.uwyn.rife2/rife2-native-app)
+[![Snapshot](https://img.shields.io/maven-metadata/v?metadataUrl=https%3A%2F%2Frepo.rife2.com%2Fsnapshots%2Fcom%2Fuwyn%2Frife2%2Frife2-native-app%2Fmaven-metadata.xml&label=snapshot)](https://repo.rife2.com/#/snapshots/com/uwyn/rife2/rife2-native-app)
+[![bld-ci](https://github.com/rife2/rife2-native-app/actions/workflows/bld.yml/badge.svg)](https://github.com/rife2/rife2-native-app/actions/workflows/bld.yml)
+
 # RIFE2 Native App
 
 Runs a [RIFE2](https://rife2.com) site inside an iOS, macOS or Android app.
@@ -297,6 +305,11 @@ checks/android/check.sh build/native/android/libmysite.so "see:Welcome" "tap:Sig
 builds an app of the Android classes around a library, installs it on
 what adb sees, and goes through it: each step waits until the screen shows
 a text, or taps it.
+
+## Javadocs
+
+The javadocs of the library are at https://rife2.github.io/rife2-native-app/,
+and those of the bld extension at https://rife2.github.io/rife2-native-app/extension/.
 
 ## License
 
