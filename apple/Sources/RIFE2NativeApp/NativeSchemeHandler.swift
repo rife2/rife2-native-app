@@ -146,16 +146,20 @@ public final class NativeSchemeHandler: NSObject, WKURLSchemeHandler {
             // shows: followed here, the address would stay and the relative
             // links of the page would be wrong. Anything else, a file or what a
             // script asks for, is followed here.
-            if (300...399).contains(status), redirects < 5,
+            if (300...399).contains(status),
                let said = headers.first(where: { $0.name.caseInsensitiveCompare("Location") == .orderedSame })?.value,
-               let location = URL(string: said, relativeTo: base)?.absoluteString, location.hasPrefix(root + "/") || location == root {
+               let location = URL(string: said, relativeTo: base)?.absoluteString {
+                let own = location.hasPrefix(root + "/") || location == root
+                // a page sent elsewhere goes there through the web view, which leaves the app for it
                 if page, let quoted = try? JSONSerialization.data(withJSONObject: location, options: .fragmentsAllowed) {
                     forward = Data("<!DOCTYPE html><script>location.replace(".utf8) + quoted + Data(")</script>".utf8)
                     respond(200, ["Content-Type": "text/html; charset=UTF-8"])
-                } else {
-                    followed.withLock { $0 = location }
+                    return
                 }
-                return
+                if own && redirects < 5 {
+                    followed.withLock { $0 = location }
+                    return
+                }
             }
             respond(status, Dictionary(headers.map { ($0.name, $0.value) }) { _, last in last })
         }

@@ -104,7 +104,11 @@ public final class NativeSite: @unchecked Sendable {
             }
             // in a file of the app that lasts and isn't the user's to see; an
             // extension keeps nothing of its own
-            if !isExtension, let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            if !isExtension, var support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+                // outside a sandbox that's the folder of every app, the app gets one of its own in it
+                if !support.path.contains("/Containers/"), let identifier = Bundle.main.bundleIdentifier {
+                    support.appendPathComponent(identifier, isDirectory: true)
+                }
                 try? FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
                 told["rife.nativeapp.data"] = support.path
             }

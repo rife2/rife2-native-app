@@ -111,12 +111,18 @@
             return fetched.call(this, new Request(asked, {headers: headers}));
         };
 
-        const open = XMLHttpRequest.prototype.open, send = XMLHttpRequest.prototype.send, header = XMLHttpRequest.prototype.setRequestHeader;
+        const open = XMLHttpRequest.prototype.open, send = XMLHttpRequest.prototype.send, header = XMLHttpRequest.prototype.setRequestHeader,
+            abort = XMLHttpRequest.prototype.abort;
         XMLHttpRequest.prototype.open = function(method, address, later) {
             // one that a script waits for can't hand anything over first
             this.rife2Hands = (arguments.length < 3 || !!later) && own(address);
             this.rife2Typed = false;
+            this.rife2Opened = (this.rife2Opened || 0) + 1;
             return open.apply(this, arguments);
+        };
+        XMLHttpRequest.prototype.abort = function() {
+            this.rife2Opened = (this.rife2Opened || 0) + 1;
+            return abort.apply(this, arguments);
         };
         XMLHttpRequest.prototype.setRequestHeader = function(name) {
             this.rife2Typed = this.rife2Typed || String(name).toLowerCase() === 'content-type';
@@ -127,13 +133,19 @@
                 return send.call(this, body);
             }
             const asked = new Request(location.href, {method: 'POST', body: body});
+            const opened = this.rife2Opened;
+            // unless it was given up or opened again meanwhile
+            const going = () => this.rife2Opened === opened && this.readyState === XMLHttpRequest.OPENED;
             handed(asked, this.rife2Typed ? '' : asked.headers.get('content-type') || '').then(posted => {
-                // unless it was given up meanwhile
-                if (this.readyState === XMLHttpRequest.OPENED) {
+                if (going()) {
                     header.call(this, 'X-Rife2-Body', posted);
                     send.call(this, body);
                 }
-            }, () => send.call(this, body));
+            }, () => {
+                if (going()) {
+                    send.call(this, body);
+                }
+            });
         };
 
         // of a form, or of the button that submits it when the button says

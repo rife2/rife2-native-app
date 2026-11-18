@@ -68,6 +68,9 @@ public class NativePages {
     // the address of the page that's shown, to go back to when Android stops what draws it
     private String at_;
     private ValueCallback<Uri[]> choosing_;
+    // when a web view last took the place of one whose pages stopped being drawn, and how long it waited
+    private long replaced_ = -1_000_000;
+    private long waited_ = 0;
 
     /**
      * @param activity the activity that shows the pages
@@ -157,7 +160,8 @@ public class NativePages {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 var address = request.getUrl();
                 var scheme = String.valueOf(address.getScheme()).toLowerCase(java.util.Locale.ROOT);
-                if (NativeSite.own(activity, address) || INSIDE.contains(scheme)) {
+                // what a frame inside a page loads stays there
+                if (!request.isForMainFrame() || NativeSite.own(activity, address) || INSIDE.contains(scheme)) {
                     return false;
                 }
                 if (!KEPT_IN.contains(scheme)) {
@@ -198,7 +202,16 @@ public class NativePages {
                 view.destroy();
                 if (view == view_) {
                     view_ = made();
-                    view_.loadUrl(at_);
+                    // a page that stops it each time is loaded again later, longer each time
+                    var now = android.os.SystemClock.elapsedRealtime();
+                    waited_ = now - replaced_ < 10_000 ? Math.min(Math.max(waited_ * 2, 10_000), 300_000) : 0;
+                    replaced_ = now;
+                    var replacement = view_;
+                    shown.postDelayed(() -> {
+                        if (replacement == view_) {
+                            replacement.loadUrl(at_);
+                        }
+                    }, waited_);
                 }
                 return true;
             }

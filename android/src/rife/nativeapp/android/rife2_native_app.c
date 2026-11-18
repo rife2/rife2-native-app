@@ -147,7 +147,7 @@ JNIEXPORT jstring JNICALL Java_rife_nativeapp_android_NativeSite_start(JNIEnv* e
 }
 
 /* Has the site answer a request, with what was posted or NULL, and tells the
-   answer of it. The number is one that no other request has at the same time. */
+   answer of it. The number is one that no request had before. */
 JNIEXPORT void JNICALL Java_rife_nativeapp_android_NativeSite_handle(JNIEnv* env, jclass class, jlong number,
                                                                      jbyteArray url, jbyteArray method, jbyteArray headers, jbyteArray body, jobject answer) {
     struct told told = {env, answer};
