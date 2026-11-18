@@ -15,12 +15,32 @@ final class Commands {
     private Commands() {
     }
 
-    // a directory that isn't there is fine
+    // A directory that isn't there is fine. A link is removed as a link,
+    // never what it leads to, which can be a GraalVM of the machine.
     static void delete(File directory)
     throws IOException {
-        if (directory.exists()) {
-            rife.tools.FileUtils.deleteDirectory(directory);
+        var path = directory.toPath();
+        if (!java.nio.file.Files.exists(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            return;
         }
+        java.nio.file.Files.walkFileTree(path, new java.nio.file.SimpleFileVisitor<>() {
+            @Override
+            public java.nio.file.FileVisitResult visitFile(java.nio.file.Path file, java.nio.file.attribute.BasicFileAttributes attributes)
+            throws IOException {
+                java.nio.file.Files.delete(file);
+                return java.nio.file.FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public java.nio.file.FileVisitResult postVisitDirectory(java.nio.file.Path visited, IOException failure)
+            throws IOException {
+                if (failure != null) {
+                    throw failure;
+                }
+                java.nio.file.Files.delete(visited);
+                return java.nio.file.FileVisitResult.CONTINUE;
+            }
+        });
     }
 
     // runs a command with its output on the console, and fails when it does

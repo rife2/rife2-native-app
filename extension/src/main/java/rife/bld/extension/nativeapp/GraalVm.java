@@ -44,7 +44,8 @@ public final class GraalVm {
             }
             home = sdkman + "/candidates/java/" + COMMUNITY;
         }
-        var graalvm = new GraalVm(new File(home));
+        // the real directory, since a link would be copied as a link for iOS, and written into
+        var graalvm = new GraalVm(new File(home).getCanonicalFile());
         if (!graalvm.tool("native-image").canExecute()) {
             throw new IOException("No GraalVM with native-image in " + home + ": sdk install java " + COMMUNITY + ", or set GRAALVM_HOME to another one");
         }
