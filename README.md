@@ -50,7 +50,7 @@ by a `rife.nativeapp.SiteProvider` instead, which the app names in
 ```java
 public class MyApp implements SiteProvider {
     public Site site(HierarchicalProperties properties) {
-        // an app extension, and the JVM, aren't told a directory for what lasts
+        // an app extension isn't told a directory for what lasts
         return new MySite(new File(properties.getValueString(NativeApp.DATA, "build/data")));
     }
 }
@@ -74,9 +74,9 @@ like the ones that RIFE2's content management scales, without one.
 
 The scripts, styles and images of the site are served from the classpath
 directory `webapp`, which is where the native build puts all of
-`src/main/webapp`. They're only served for an address that no route of the site takes, so a
-route that takes every path keeps them, the script of the pages among them,
-from being served.
+`src/main/webapp`. They're only served for an address that no route of the
+site takes, so a route that takes every path keeps them, the script of the
+pages among them, from being served.
 
 ## The pages
 
@@ -161,7 +161,8 @@ answers what's at a path all at once, for what isn't a page in a web view.
 An app extension, like a widget, links the package too and asks
 `NativeSite` for what it needs; the web view parts aren't available there.
 The site of an extension isn't told the platform, so its pages get no
-script, nor a directory for what lasts, so it keeps no cookies. It starts
+script, nor a directory for what lasts, so it keeps cookies only while it
+runs. It starts
 the site with a heap of 16 MB, since iOS stops an extension that uses more
 than a few tens of megabytes; `NativeSite.arguments` changes that. watchOS
 has neither a web view nor a target of native-image: a watch app gets what
@@ -281,7 +282,8 @@ bld.repositories=MAVEN_CENTRAL,RIFE2_SNAPSHOTS,RIFE2_RELEASES
 
 Its build class extends `NativeAppProject` instead of `WebProject`. A native
 image can't compile templates while it runs, so the build precompiles them,
-and `native-library` stops when there are templates that it doesn't. The
+and `native-library` stops when there are templates of a type that it
+doesn't. The native library has all of them, rendered by a check or not. The
 site is asked on the JVM before each build, which needs the servlet API that
 RIFE2's interfaces name, but no servlet container:
 
@@ -299,7 +301,7 @@ public class MyBuild extends NativeAppProject {
         nativeApp()
             .libraryName("mysite")
             .addresses("/", "/css/site.css", "/nothing-here")
-            .walk("com.example.Walk", "build/native/walk");
+            .walk("com.example.Walk");
     }
 }
 ```
@@ -345,14 +347,15 @@ each time, like a page with a CSRF token, can't be checked by
 `native-check`, and is better left to the walk.
 
 The walk is a class of the site's own sources, in `src/main/java`, which
-asks for what the app would, posts included:
+asks for what the app would, posts included. It's run with the properties
+that the checks tell the site, in system properties that a `NativeApp`
+starts with, among them a directory for what the site keeps that's empty
+each time. Here the site has a route that takes the post to `/orders`:
 
 ```java
 public class Walk {
     public static void main(String[] arguments) {
-        var app = new NativeApp()
-            .property(NativeApp.PLATFORM, "ios")
-            .property(NativeApp.DATA, arguments[0]);
+        var app = new NativeApp();
         var runner = app.runner();
         runner.handle("/");
         runner.handle("/orders", new SiteRequest(RequestMethod.POST)
@@ -395,7 +398,8 @@ java -cp "<the site's classpath>:build/native/mac/static" rife.nativeapp.NativeA
 ```
 
 where `build/native/<target>/static` is the copy of `src/main/webapp` that
-the native build made, prints the status, size and CRC-32 of each answer; a `-Dname=value` sets a
+the native build made, and `-Drife.nativeapp.platform=ios` asks as an app
+would, prints the status, size and CRC-32 of each answer; a `-Dname=value` sets a
 property of the site first, and the system property `rife.nativeapp.saved`
 names a directory that gets each answer as a file. `checks/ask.c`, linked
 with the native library, prints the status, size and CRC-32 of the same

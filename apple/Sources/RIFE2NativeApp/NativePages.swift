@@ -99,7 +99,8 @@ open class NativePages: NSObject, ObservableObject, WKNavigationDelegate, WKUIDe
 
     /// Shows the page at a path of the site.
     public func go(_ path: String) {
-        guard let url = URL(string: site.root + path) else {
+        // without the slash, the path would be part of the host
+        guard path.hasPrefix("/"), let url = URL(string: site.root + path) else {
             return
         }
         settle()
@@ -200,8 +201,17 @@ open class NativePages: NSObject, ObservableObject, WKNavigationDelegate, WKUIDe
               !own(url), !["about", "blob", "data", "javascript"].contains(scheme) else {
             return .allow
         }
-        await leave(to: url)
+        if leaving.contains(scheme) {
+            await leave(to: url)
+        }
         return .cancel
+    }
+
+    /// The schemes of the addresses that a link takes out of the app to the
+    /// system; the others go nowhere, since some would start what the user
+    /// didn't choose to.
+    open var leaving: Set<String> {
+        ["http", "https", "mailto", "tel", "sms", "facetime"]
     }
 
     // a link of the site that opens a new window shows its page here, there's one window

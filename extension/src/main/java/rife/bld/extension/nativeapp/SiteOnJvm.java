@@ -5,6 +5,7 @@
 package rife.bld.extension.nativeapp;
 
 import rife.bld.WebProject;
+import rife.bld.operations.TemplateType;
 import rife.tools.FileUtils;
 
 import java.io.File;
@@ -45,12 +46,47 @@ final class SiteOnJvm {
         return settings_.bundleIdentifier() != null ? settings_.bundleIdentifier() : project_.pkg() + ".site";
     }
 
+    private static final List<String> TEMPLATE_TYPES = List.of("html", "xml", "txt", "sql", "json", "svg");
+
+    private List<File> templateDirectories() {
+        var directories = project_.precompileOperation().sourceDirectories();
+        return directories.isEmpty() ? List.of(project_.srcMainResourcesTemplatesDirectory()) : directories;
+    }
+
+    // the class names of the templates, as RIFE2 precompiles them
+    List<String> templateClasses() {
+        var types = project_.precompileOperation().templateTypes().stream().map(TemplateType::identifier).toList();
+        var classes = new java.util.TreeSet<String>();
+        for (var directory : templateDirectories()) {
+            if (!directory.isDirectory()) {
+                continue;
+            }
+            for (var file : FileUtils.getFileList(directory)) {
+                var name = file.replace(File.separatorChar, '/');
+                var dot = name.lastIndexOf('.');
+                if (dot > 0 && types.contains(name.substring(dot + 1)) && !name.substring(name.lastIndexOf('/') + 1).startsWith(".")) {
+                    classes.add("rife.template." + name.substring(dot + 1) + "." + name.substring(0, dot).replace('/', '.'));
+                }
+            }
+        }
+        return new ArrayList<>(classes);
+    }
+
     // a native image can't compile a template while it runs
     void requirePrecompiledTemplates() {
-        var templates = project_.srcMainResourcesTemplatesDirectory();
-        if (templates.isDirectory() && !FileUtils.getFileList(templates).isEmpty() && project_.precompileOperation().templateTypes().isEmpty()) {
-            throw new IllegalStateException("The templates of " + templates + " are only in a native library when they're precompiled: " +
-                                            "precompileOperation().templateTypes(TemplateType.HTML, ...)");
+        var types = project_.precompileOperation().templateTypes().stream().map(TemplateType::identifier).toList();
+        for (var directory : templateDirectories()) {
+            if (!directory.isDirectory()) {
+                continue;
+            }
+            for (var file : FileUtils.getFileList(directory)) {
+                var dot = file.lastIndexOf('.');
+                var type = dot < 0 ? "" : file.substring(dot + 1);
+                if (TEMPLATE_TYPES.contains(type) && !types.contains(type) && !new File(file).getName().startsWith(".")) {
+                    throw new IllegalStateException("The template " + new File(directory, file) + " is only in a native library when it's precompiled: " +
+                                                    "precompileOperation().templateTypes(TemplateType." + type.toUpperCase() + ", ...)");
+                }
+            }
         }
     }
 
@@ -70,10 +106,17 @@ final class SiteOnJvm {
                 new File(webapp, file).delete();
             }
         }
-        // all of them, not only the ones that the tracing agent saw asked for
-        var config = new File(directory, "static/META-INF/native-image/rife2-native-app-static/resource-config.json");
-        config.getParentFile().mkdirs();
-        FileUtils.writeString("{\"resources\": {\"includes\": [{\"pattern\": \"\\\\Qwebapp/\\\\E.*\"}]}}\n", config);
+        // all of them, and all the templates, not only what the tracing agent saw asked for
+        var config = new File(directory, "static/META-INF/native-image/rife2-native-app-static");
+        config.mkdirs();
+        FileUtils.writeString("{\"resources\": {\"includes\": [{\"pattern\": \"\\\\Qwebapp/\\\\E.*\"}]}}\n", new File(config, "resource-config.json"));
+        var reflection = new StringBuilder("[");
+        for (var template : templateClasses()) {
+            reflection.append(reflection.length() > 1 ? ",\n" : "\n").append("  {\"name\": \"").append(template)
+                .append("\", \"methods\": [{\"name\": \"<init>\", \"parameterTypes\": []}, ")
+                .append("{\"name\": \"isModified\", \"parameterTypes\": [\"rife.resources.ResourceFinder\", \"java.lang.String\"]}]}");
+        }
+        FileUtils.writeString(reflection.append("\n]\n").toString(), new File(config, "reflect-config.json"));
         return webapp.getParentFile();
     }
 
@@ -124,9 +167,11 @@ final class SiteOnJvm {
         Commands.delete(configuration);
         var agent = "-agentlib:native-image-agent=config-merge-dir=" + configuration.getAbsolutePath();
         if (settings_.walkClass() != null) {
-            var command = new ArrayList<>(List.of(graalvm_.tool("java").getAbsolutePath(), agent, HEADLESS, "-cp", joined(classpath), settings_.walkClass()));
-            command.addAll(settings_.walkArguments());
-            Commands.run(project_.workDirectory(), command);
+            // told as the checks are, which a NativeApp starts with
+            var walked = new File(data.getParentFile(), data.getName() + "-walk");
+            Commands.delete(walked);
+            walked.mkdirs();
+            Commands.run(project_.workDirectory(), walkCommand(new File(graalvm_.tool("java").getAbsolutePath()), agent, classpath, walked));
         }
         if (!settings_.addresses().isEmpty()) {
             var answers = ask(classpath, data, agent);
@@ -136,6 +181,16 @@ final class SiteOnJvm {
                 throw new IOException("The site didn't answer on the JVM:\n" + String.join("\n", failed));
             }
         }
+    }
+
+    List<String> walkCommand(File java, String agent, List<File> classpath, File data) {
+        var command = new ArrayList<>(List.of(java.getAbsolutePath(), agent, HEADLESS));
+        for (var property : properties(data).entrySet()) {
+            command.add("-D" + property.getKey() + "=" + property.getValue());
+        }
+        command.addAll(List.of("-cp", joined(classpath), settings_.walkClass()));
+        command.addAll(settings_.walkArguments());
+        return command;
     }
 
     // what the site answers at the addresses that are checked, as lines of
@@ -170,12 +225,11 @@ final class SiteOnJvm {
     java.util.Map<String, String> properties(File data) {
         var properties = new java.util.LinkedHashMap<String, String>();
         properties.put("rife.nativeapp.platform", target_.platform());
-        if (target_ == Target.ANDROID) {
-            properties.put("rife.nativeapp.wholeAnswers", "true");
-        }
         properties.putAll(settings_.properties());
         // each side keeps what it keeps apart
         properties.put("rife.nativeapp.data", data.getAbsolutePath());
+        // as ask.c asks for each answer, which an Android app does too
+        properties.put("rife.nativeapp.wholeAnswers", "true");
         return properties;
     }
 

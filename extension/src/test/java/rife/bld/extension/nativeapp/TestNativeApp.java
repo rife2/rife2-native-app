@@ -48,7 +48,9 @@ class TestNativeApp {
     void testChecksAreToldWhatTheAppTellsTheSite() {
         var ios = site(new NativeAppSettings()).properties(new File("data"));
         assertEquals("ios", ios.get("rife.nativeapp.platform"));
-        assertNull(ios.get("rife.nativeapp.wholeAnswers"));
+        assertEquals("true", ios.get("rife.nativeapp.wholeAnswers"));
+        // as ask.c always asks
+        assertEquals("true", site(new NativeAppSettings().property("rife.nativeapp.wholeAnswers", "false")).properties(new File("data")).get("rife.nativeapp.wholeAnswers"));
         var project = new WebProject();
         var android = new SiteOnJvm(project, new NativeAppSettings(), null, Target.ANDROID).properties(new File("data"));
         assertEquals("android", android.get("rife.nativeapp.platform"));
@@ -75,6 +77,15 @@ class TestNativeApp {
         var pattern = java.util.regex.Pattern.compile(config.replaceAll("(?s).*\"pattern\": \"(.*)\".*", "$1").replace("\\\\", "\\"));
         assertTrue(pattern.matcher("webapp/js/unasked.js").matches(), config);
         assertFalse(pattern.matcher("templates/home.class").matches(), config);
+
+        // and every template, rendered by a check or not
+        var template = new File(project.srcMainResourcesTemplatesDirectory(), "orders/edit.html");
+        template.getParentFile().mkdirs();
+        Files.writeString(template.toPath(), "<html></html>");
+        project.precompileOperation().templateTypes(rife.bld.operations.TemplateType.HTML);
+        staged = new SiteOnJvm(project, new NativeAppSettings(), null, Target.MAC).stage(temp.resolve("out").toFile());
+        var reflection = Files.readString(staged.toPath().resolve("META-INF/native-image/rife2-native-app-static/reflect-config.json"));
+        assertTrue(reflection.contains("\"name\": \"rife.template.html.orders.edit\""), reflection);
     }
 
     @Test
@@ -87,12 +98,32 @@ class TestNativeApp {
         };
         var site = new SiteOnJvm(project, new NativeAppSettings(), null, Target.MAC);
         site.requirePrecompiledTemplates();
-        var template = new File(project.srcMainResourcesTemplatesDirectory(), "home.html");
-        template.getParentFile().mkdirs();
-        Files.writeString(template.toPath(), "<html></html>");
+        var templates = project.srcMainResourcesTemplatesDirectory();
+        templates.mkdirs();
+        // what isn't a template doesn't count
+        Files.writeString(templates.toPath().resolve(".DS_Store"), "");
+        Files.writeString(templates.toPath().resolve("README.md"), "");
+        site.requirePrecompiledTemplates();
+        Files.writeString(templates.toPath().resolve("home.html"), "<html></html>");
         assertThrows(IllegalStateException.class, site::requirePrecompiledTemplates);
         project.precompileOperation().templateTypes(rife.bld.operations.TemplateType.HTML);
         site.requirePrecompiledTemplates();
+        // each type that's there
+        Files.createDirectories(templates.toPath().resolve("mail"));
+        Files.writeString(templates.toPath().resolve("mail/welcome.txt"), "hi");
+        assertThrows(IllegalStateException.class, site::requirePrecompiledTemplates);
+        project.precompileOperation().templateTypes(rife.bld.operations.TemplateType.HTML, rife.bld.operations.TemplateType.TXT);
+        site.requirePrecompiledTemplates();
+        assertEquals(List.of("rife.template.html.home", "rife.template.txt.mail.welcome"), site.templateClasses());
+    }
+
+    @Test
+    void testTheWalkIsToldAsTheChecksAre() {
+        var site = site(new NativeAppSettings().walk("com.example.Walk", "one"));
+        var command = site.walkCommand(new File("java"), "-agentlib:x", List.of(new File("site.jar")), new File("walked"));
+        assertTrue(command.contains("-Drife.nativeapp.platform=ios"), command.toString());
+        assertTrue(command.contains("-Drife.nativeapp.data=" + new File("walked").getAbsolutePath()), command.toString());
+        assertEquals(List.of("com.example.Walk", "one"), command.subList(command.size() - 2, command.size()));
     }
 
     @Test

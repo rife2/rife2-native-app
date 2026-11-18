@@ -145,8 +145,6 @@ public final class NativeSite {
             System.loadLibrary(library);
             var told = new LinkedHashMap<String, String>();
             told.put("rife.nativeapp.platform", "android");
-            // a web view of Android takes an answer all at once, see the bridge
-            told.put("rife.nativeapp.wholeAnswers", "true");
             told.put("rife.nativeapp.scheme", scheme);
             told.put("rife.nativeapp.host", host(context));
             told.put("rife.nativeapp.data", context.getFilesDir().getPath());
@@ -160,6 +158,10 @@ public final class NativeSite {
                 // the pages leave the version out
             }
             told.putAll(properties);
+            // a web view of Android takes an answer all at once, and the
+            // bridge's memory for it only lasts while it's asked, so an app
+            // can't say otherwise
+            told.put("rife.nativeapp.wholeAnswers", "true");
             var said = new byte[told.size() * 2][];
             var i = 0;
             for (var property : told.entrySet()) {

@@ -253,6 +253,10 @@ public class NativePages {
 
     /** Shows the page at a path of the site. */
     public void go(String path) {
+        // without the slash, the path would be part of the host
+        if (!path.startsWith("/")) {
+            return;
+        }
         view().loadUrl(NativeSite.root(activity) + path);
     }
 

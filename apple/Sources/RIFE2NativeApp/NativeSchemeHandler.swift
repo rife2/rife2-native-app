@@ -37,7 +37,7 @@ public final class NativeSchemeHandler: NSObject, WKURLSchemeHandler {
             task.didFailWithError(URLError(.badURL))
             return
         }
-        let headers = (request.allHTTPHeaderFields ?? [:]).map { "\($0): \($1)\n" }.joined()
+        let headers = (request.allHTTPHeaderFields ?? [:]).map { "\(Self.oneLine($0)): \(Self.oneLine($1))\n" }.joined()
         // a web view hands over what a page posts as a stream
         let body = request.httpBody ?? request.httpBodyStream.map { stream in
             var read = Data()
@@ -86,6 +86,11 @@ public final class NativeSchemeHandler: NSObject, WKURLSchemeHandler {
                 }
             }
         }
+    }
+
+    // a line break would tell the site another header
+    static func oneLine(_ text: String) -> String {
+        text.replacingOccurrences(of: "\r", with: " ").replacingOccurrences(of: "\n", with: " ")
     }
 
     // a redirect is followed with a GET, which has no body that these would describe
@@ -164,6 +169,11 @@ public final class NativeSchemeHandler: NSObject, WKURLSchemeHandler {
                let said = headers.first(where: { $0.name.caseInsensitiveCompare("Location") == .orderedSame })?.value,
                let location = URL(string: said, relativeTo: base)?.absoluteString {
                 let own = location.hasPrefix(root + "/") || location == root
+                // a browser refuses to be sent to a script or to data, which would run as the site
+                guard own || ["http", "https"].contains(URL(string: location)?.scheme?.lowercased() ?? "") else {
+                    respond(502, [:])
+                    return
+                }
                 // a page sent elsewhere goes there through the web view, which leaves the app for it
                 if page, let quoted = try? JSONSerialization.data(withJSONObject: location, options: .fragmentsAllowed) {
                     forward = Data("<!DOCTYPE html><script>location.replace(".utf8) + quoted + Data(")</script>".utf8)

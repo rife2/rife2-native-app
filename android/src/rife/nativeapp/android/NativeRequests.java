@@ -133,17 +133,17 @@ public class NativeRequests {
         }
         var lines = new StringBuilder();
         for (var header : headers.entrySet()) {
-            lines.append(header.getKey()).append(": ").append(header.getValue()).append('\n');
+            lines.append(oneLine(header.getKey())).append(": ").append(oneLine(header.getValue())).append('\n');
         }
         var page = request.isForMainFrame();
         var answer = NativeSite.ask(context_, address, request.getMethod(), lines.toString(), body);
         // a page that's sent on is told so, see below; anything else, a file
         // or what a script asks for, is followed here
-        // with a GET, which has no body that these would describe
+        // a redirect is followed with a GET, which has no body for these headers to describe
         var followedLines = new StringBuilder();
         for (var header : headers.entrySet()) {
             if (!header.getKey().equalsIgnoreCase("Content-Type") && !header.getKey().equalsIgnoreCase("Content-Length")) {
-                followedLines.append(header.getKey()).append(": ").append(header.getValue()).append('\n');
+                followedLines.append(oneLine(header.getKey())).append(": ").append(oneLine(header.getValue())).append('\n');
             }
         }
         var from = address;
@@ -152,6 +152,11 @@ public class NativeRequests {
             answer = NativeSite.ask(context_, from, "GET", followedLines.toString(), null);
         }
         return response(answer, page);
+    }
+
+    // a line break, in what a page says it posts for instance, would tell the site another header
+    private static String oneLine(String text) {
+        return text.replaceAll("[\\r\\n]+", " ");
     }
 
     private static WebResourceResponse response(NativeSite.Answer answer, boolean page) {
@@ -180,6 +185,11 @@ public class NativeRequests {
         // shows: followed here, the address would stay and the relative links
         // of the page would be wrong.
         if (page && status >= 300 && status < 400 && location != null) {
+            // a browser refuses to be sent to a script or to data, which would run as the site
+            var scheme = Uri.parse(location).getScheme();
+            if (scheme != null && !scheme.equalsIgnoreCase("http") && !scheme.equalsIgnoreCase("https")) {
+                return new WebResourceResponse("text/plain", "UTF-8", 502, "Bad Gateway", Map.of("Cache-Control", "no-store"), new ByteArrayInputStream(new byte[0]));
+            }
             body = ("<!DOCTYPE html><script>location.replace(" + JSONObject.quote(location) + ")</script>").getBytes(StandardCharsets.UTF_8);
             headers.clear();
             headers.put("Content-Type", "text/html; charset=UTF-8");
