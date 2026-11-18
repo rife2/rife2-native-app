@@ -25,7 +25,8 @@ device) name=ios; sdk=iphoneos; triple=arm64-apple-ios17.0 ;;
 *) echo "Usage: $0 sim|device" >&2; exit 2 ;;
 esac
 
-export JAVA_HOME="$java_home" PATH="$java_home/bin:$PATH"
+export JAVA_HOME="${java_home:?the GraalVM}" PATH="$java_home/bin:$PATH"
+: "${work:?where the sources are kept}" "${out:?where the libraries go}" "${tools:?where jvmfuncs-fallbacks.py is}"
 command -v gmake > /dev/null || { echo "GNU make 4 or later is needed as gmake: brew install make" >&2; exit 1; }
 command -v autoconf > /dev/null || { echo "autoconf is needed: brew install autoconf" >&2; exit 1; }
 
@@ -106,9 +107,10 @@ if [ "$(git -C graal rev-parse HEAD 2>/dev/null)" != "$graal_commit" ]; then
     git -C graal checkout -q FETCH_HEAD
 fi
 
-libs="$out"
+# built apart and moved in place at the end, so that a run that fails leaves nothing that looks built
+libs="$out.partial"
 objects="$work/obj-$name"
-rm -rf "$libs"
+rm -rf "$libs" "$objects"
 mkdir -p "$libs/static" "$libs/clibraries" "$objects/chelper" "$objects/darwin" "$objects/jvm"
 cp "src/build/$name-aarch64/images/static-libs-graal/lib/"*.a "$libs/static/"
 
@@ -128,5 +130,6 @@ done
 libtool -static -no_warning_for_no_symbols -o "$libs/clibraries/liblibchelper.a" "$objects"/chelper/*.o
 libtool -static -o "$libs/clibraries/libdarwin.a" "$objects"/darwin/*.o
 libtool -static -o "$libs/clibraries/libjvm.a" "$objects"/jvm/*.o
-rm -rf "$objects"
-echo "Built $(ls "$libs/static" | wc -l | tr -d ' ') libraries of $tag and 3 of GraalVM $graal_commit for $triple in $libs"
+rm -rf "$objects" "$out"
+mv "$libs" "$out"
+echo "Built $(ls "$out/static" | wc -l | tr -d ' ') libraries of $tag and 3 of GraalVM $graal_commit for $triple in $out"

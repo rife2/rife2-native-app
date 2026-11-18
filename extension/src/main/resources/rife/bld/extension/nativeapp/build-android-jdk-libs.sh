@@ -18,14 +18,20 @@
 # environment. Needs what build-ios-jdk-libs.sh needs, and that it ran once.
 set -euo pipefail
 
-export JAVA_HOME="$java_home" PATH="$java_home/bin:$PATH"
+export JAVA_HOME="${java_home:?the GraalVM}" PATH="$java_home/bin:$PATH"
+: "${work:?where the sources are kept}" "${out:?where the libraries go}" "${tools:?where jvmfuncs-fallbacks.py is}"
+: "${api:?the Android API level}" "${toolchain:?the NDK toolchain}" "${compiler:?the NDK compiler}" "${adb:?adb}"
 command -v gmake > /dev/null || { echo "GNU make 4 or later is needed as gmake: brew install make" >&2; exit 1; }
 
-if [ ! -f "$work/src/.ios-port" ] || [ ! -d "$work/graal" ]; then
-    echo "./bld native-jdk-libs ios-sim has to run once first: it fetches the sources of the JDK and of GraalVM" >&2
+runtime=$(sed -n 's/^JAVA_RUNTIME_VERSION="\(.*\)"/\1/p' "$java_home/release")
+# the sources of this GraalVM's JDK and of GraalVM itself, which a run for iOS fetches
+graal_commit=$(sed -n 's/^SOURCE=.* substratevm:\([0-9a-f]*\).*/\1/p' "$java_home/release")
+if [ "$(cat "$work/src/.ios-port" 2>/dev/null)" != "jdk-${runtime%%-*}" ] || [ "$(git -C "$work/graal" rev-parse HEAD 2>/dev/null)" != "$graal_commit" ]; then
+    echo "./bld native-jdk-libs ios-sim or ios has to run first with this GraalVM: it fetches the sources of its JDK and of GraalVM" >&2
     exit 1
 fi
-runtime=$(sed -n 's/^JAVA_RUNTIME_VERSION="\(.*\)"/\1/p' "$java_home/release")
+# what native-image asks about Android's C types is answered on an Android, before anything is replaced
+"$adb" get-state > /dev/null 2>&1 || { echo "adb sees no emulator or device to ask about Android's C types" >&2; exit 1; }
 
 # What the JDK's configure wants and a Mac that builds for Android doesn't have: a font header
 # that it only looks for, and one function that Android's C library only declares with
@@ -73,9 +79,10 @@ fi
 (cd "$work/src" && gmake CONF=android-aarch64 static-libs-graal-image > "$work/build-android.log" 2>&1) ||
     { echo "The JDK's libraries didn't build, see $work/build-android.log" >&2; exit 1; }
 
-libs="$out"
+# built apart and moved in place at the end, so that a run that fails leaves the libraries before it
+libs="$out.partial"
 objects="$work/obj-android"
-rm -rf "$libs"
+rm -rf "$libs" "$objects"
 mkdir -p "$libs/static" "$libs/clibraries" "$objects/chelper" "$objects/jvm"
 cp "$work/src/build/android-aarch64/images/static-libs-graal/lib/"*.a "$libs/static/"
 
@@ -97,7 +104,7 @@ rm -rf "$objects"
 
 # The questions about the C types don't depend on the site, any class does to ask them for.
 query="$work/query-android"
-rm -rf "$query" "$libs/cap"
+rm -rf "$query"
 mkdir -p "$query/classes" "$query/bin" "$query/cap"
 echo "public class Asked { }" > "$query/Asked.java"
 javac -d "$query/classes" "$query/Asked.java"
@@ -116,4 +123,6 @@ for source in "$query"/*.c; do
 done
 # in their place only once they're all there
 mv "$query/cap" "$libs/cap"
-echo "Built $(ls "$libs/static" | wc -l | tr -d ' ') libraries of the JDK $runtime and 2 of GraalVM for Android $api, and $(ls "$libs/cap" | wc -l | tr -d ' ') answers about its C types, in $libs"
+rm -rf "$out"
+mv "$libs" "$out"
+echo "Built $(ls "$out/static" | wc -l | tr -d ' ') libraries of the JDK $runtime and 2 of GraalVM for Android $api, and $(ls "$out/cap" | wc -l | tr -d ' ') answers about its C types, in $out"
