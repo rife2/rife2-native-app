@@ -32,8 +32,13 @@ static void content(void* context, const char* bytes, int length) {
 static void ended(void* context, int how, const char* why) {
     if (how != 0) {
         status = -how;
-        /* the text is only the library's during the call */
+        /* the text is only the library's during the call, and an answer is one line */
         snprintf(failure, sizeof failure, "%s", why ? why : "");
+        for (char* c = failure; *c; c++) {
+            if (*c == '\n' || *c == '\r') {
+                *c = ' ';
+            }
+        }
     }
 }
 
@@ -57,6 +62,8 @@ int main(int argc, char** argv) {
             rife2_property(thread, name, equals + 1);
         }
     }
+    /* an answer that goes on after its request, an event stream, ends with it here */
+    rife2_property(thread, "rife.nativeapp.wholeAnswers", "true");
     int failed = 0;
     for (int i = 1; i < argc; i++) {
         if (strncmp(argv[i], "-D", 2) == 0) {
@@ -68,6 +75,8 @@ int main(int argc, char** argv) {
         failure[0] = 0;
         rife2_handle(thread, i, argv[i], "GET", "", NULL, 0, NULL, committed, content, ended);
         printf("%s %d %ld %lu%s%s\n", argv[i], status, size, checksum, failure[0] ? " " : "", failure);
+        /* what was answered is kept when the library stops the program later */
+        fflush(stdout);
         failed |= status < 0;
     }
     return failed;
