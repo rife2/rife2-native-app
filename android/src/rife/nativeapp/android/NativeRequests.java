@@ -140,12 +140,8 @@ public class NativeRequests {
         if (null == said) {
             return null;
         }
-        try {
-            var location = new java.net.URL(new java.net.URL(from), said).toString();
-            return NativeSite.own(context_, Uri.parse(location)) ? location : null;
-        } catch (java.net.MalformedURLException e) {
-            return null;
-        }
+        var location = resolved(from, said.replaceAll("[\\t\\r\\n]", "").replaceAll("^[\\x00-\\x20]+|[\\x00-\\x20]+$", ""));
+        return location != null && NativeSite.own(context_, Uri.parse(location)) ? location : null;
     }
 
     /**

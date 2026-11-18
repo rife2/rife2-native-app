@@ -329,7 +329,7 @@ public class NativePages {
     // is handed and that's still there when Android took the activity away
     // meanwhile.
     private void offer(String name, String type, byte[] content) {
-        var kind = null == type || type.isEmpty() ? "application/octet-stream" : type.split(";")[0].trim();
+        var kind = null == type || type.isEmpty() ? "application/octet-stream" : type.split(";", 2)[0].trim();
         WRITING.execute(() -> {
             try {
                 var file = NativeShared.keep(activity, name, content);
