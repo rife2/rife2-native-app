@@ -54,7 +54,9 @@ public final class EntryPoints {
         void invoke(PointerBase context, int how, CCharPointer failure);
     }
 
+    // the app lets go of its context when it's told the end, so that's told once
     private static SiteResponseListener listener(PointerBase context, Committed committed, Content content, Ended ended) {
+        var over = new java.util.concurrent.atomic.AtomicBoolean();
         return new SiteResponseListener() {
             public void committed(SiteResponse response) {
                 try (var lines = CTypeConversion.toCString(NativeApp.headerLines(response))) {
@@ -69,10 +71,15 @@ public final class EntryPoints {
             }
 
             public void completed() {
-                ended.invoke(context, NativeApp.COMPLETED, WordFactory.nullPointer());
+                if (over.compareAndSet(false, true)) {
+                    ended.invoke(context, NativeApp.COMPLETED, WordFactory.nullPointer());
+                }
             }
 
             public void failed(Throwable exception) {
+                if (!over.compareAndSet(false, true)) {
+                    return;
+                }
                 CTypeConversion.CCharPointerHolder why;
                 try {
                     why = CTypeConversion.toCString(String.valueOf(exception));
@@ -87,7 +94,9 @@ public final class EntryPoints {
             }
 
             public void cancelled() {
-                ended.invoke(context, NativeApp.CANCELLED, WordFactory.nullPointer());
+                if (over.compareAndSet(false, true)) {
+                    ended.invoke(context, NativeApp.CANCELLED, WordFactory.nullPointer());
+                }
             }
         };
     }
