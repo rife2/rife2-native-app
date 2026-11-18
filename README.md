@@ -27,9 +27,8 @@ emulators of `arm64-v8a`.
 
 | Part | What it does |
 |---|---|
-| `RIFE2NativeApp` Swift package | starts the site's Java in an iOS or macOS app and shows its pages in a web view |
+| `Package.swift` and `apple/` | the Swift package `RIFE2NativeApp`, which starts the site's Java in an iOS or macOS app and shows its pages in a web view |
 | `android/` | the classes that show the site in an Android app, and the bridge that's linked into the site's library |
-| `apple/` | the sources of the Swift package |
 | `extension/` | the bld extension `bld-native-app`, which builds the site into a native library and checks it |
 | `checks/ask.c` | asks a native library for addresses without an app, to compare its answers with the JVM's |
 | `checks/android/` | an app made of the Android classes only, which shows a native library and taps through it |
@@ -63,14 +62,15 @@ arrives as properties, which a site can also read in its `setup()`:
 |---|---|
 | `rife.nativeapp.platform` | `ios`, `mac` or `android` |
 | `rife.nativeapp.data` | the directory where the app keeps what should last; the cookies of the site are kept there |
-| `rife.nativeapp.scheme`, `rife.nativeapp.host` | the address that the web view has the site at, `app://site` unless the app says otherwise |
+| `rife.nativeapp.scheme`, `rife.nativeapp.host` | the address that the web view has the site at: `app://site` on Apple's systems and `https://<package>.invalid` on Android, unless the app says otherwise |
 | `rife.nativeapp.temp` | the directory for temporary files and uploads, when Java's own isn't one that the app may write in |
-| `rife.nativeapp.version`, `rife.nativeapp.build` | the version of the app |
+| `rife.nativeapp.version`, `rife.nativeapp.build` | the version of the app and its build number |
 | `rife.nativeapp.wholeAnswers` | `true` when the app takes each answer all at once on the thread that asked, as on Android; a response that goes on after its request, like an event stream, then ends with it |
 
 The site runs with `java.awt.headless` set to `true`, unless the app set it
-first: it has no display, and a native image on a Mac only draws images,
-like the ones that RIFE2's content management scales, without one.
+first. It has no display, and a native image on a Mac can only draw
+images, like the ones that RIFE2's content management scales, when it's
+headless.
 
 The scripts, styles and images of the site are served from the classpath
 directory `webapp`, which is where the native build puts all of
@@ -87,10 +87,18 @@ A template includes this in its `<head>`, after its viewport `<meta>`:
 ```
 
 In a browser, it's empty. Inside an app, it's the script of RIFE2's
-`rife.nativeapp`, which marks the page with the classes `in-app` and
-`on-<platform>`, and does what a web view doesn't do by itself: printing,
-and on Android also sharing, saving a file and handing over what a page
-posts.
+`rife.nativeapp`, which does what a web view doesn't do by itself:
+printing, and on Android also sharing, saving a file and handing over what
+a page posts. It also:
+
+- adds the classes `in-app` and `on-<platform>` to the `<html>` element,
+  for styles of a page in an app or on one platform,
+- sets `window.rife2NativeApp.platform`, for a page's own scripts,
+- on Apple's systems, replaces the content of the viewport `<meta>` with
+  `width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover`,
+  so that a page keeps its size under two fingers and is laid out to the
+  edges of the screen, as a screen of an app is. A page that should zoom
+  sets its viewport again after the script.
 
 ## The C functions
 
@@ -255,9 +263,11 @@ page from elsewhere would reach the app's interfaces as well; an app whose
 pages show what's on the web allows it there with
 `setBlockNetworkLoads(false)`, which also needs the `INTERNET` permission. A
 link out of the site goes to Android, except to a file, a content address
-or an intent. With a target SDK of 33 or later, the back button comes
-through an `OnBackInvokedCallback` rather than `onBackPressed`. A service
-worker's requests don't reach the app.
+or an intent. An app that opts into predictive back, with
+`android:enableOnBackInvokedCallback` or a target SDK that makes it the
+default, gets the back button through an `OnBackInvokedCallback` instead of
+`onBackPressed`, and calls `back()` from there. A service worker's requests
+don't reach the app.
 
 `android/resources/META-INF/proguard/rife2-native-app-android.pro` has the
 rules that keep R8 from removing what the native library calls by name. An
@@ -397,11 +407,12 @@ On the JVM, before a native build:
 java -cp "<the site's classpath>:build/native/mac/static" rife.nativeapp.NativeApp -Dmy.setting=value /some/page /another
 ```
 
-where `build/native/<target>/static` is the copy of `src/main/webapp` that
-the native build made, and `-Drife.nativeapp.platform=ios` asks as an app
-would, prints the status, size and CRC-32 of each answer; a `-Dname=value` sets a
-property of the site first, and the system property `rife.nativeapp.saved`
-names a directory that gets each answer as a file. `checks/ask.c`, linked
+prints the status, size and CRC-32 of each answer. Here
+`build/native/<target>/static` is the copy of `src/main/webapp` that the
+native build made. A `-Dname=value` sets a property of the site first, so
+`-Drife.nativeapp.platform=ios` asks as an app would, and the system
+property `rife.nativeapp.saved` names a directory that gets each answer as
+a file. `checks/ask.c`, linked
 with the native library, prints the status, size and CRC-32 of the same
 addresses, as `address status size crc`, which the two can be compared by;
 `./bld native-check` does that.

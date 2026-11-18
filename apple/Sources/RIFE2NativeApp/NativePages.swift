@@ -19,7 +19,9 @@ import AppKit
 ///
 /// The pages know that they're in an app through the `context:nativeApp`
 /// value of their templates. An app adds what's its own by subclassing this,
-/// for instance its own message handlers in ``configure(_:)``. An app
+/// for instance its own message handlers in ``configure(_:)``. A subclass
+/// that overrides a delegate method calls `super`'s, which is where links
+/// leave the site, pages print and a stopped page loads again. An app
 /// extension, like a widget, uses ``NativeSite`` without this.
 @available(iOSApplicationExtension, unavailable)
 @available(macOSApplicationExtension, unavailable)

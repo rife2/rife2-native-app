@@ -17,14 +17,14 @@ import java.util.Map;
  * @author Geert Bevin (gbevin[remove] at uwyn dot com)
  * @since 1.11.0
  */
-public final class GraalVm {
+final class GraalVm {
     /**
      * The GraalVM Community Edition that the libraries are built with, as
      * sdkman names it.
      *
      * @since 1.11.0
      */
-    public static final String COMMUNITY = "25.5.5.0+3-graalce";
+    static final String COMMUNITY = "25.5.5.0+3-graalce";
     // what sdkman has as these for Linux on arm64, which the Android build runs in
     private static final Map<String, String> LINUX_CHECKSUMS = Map.of(
         "25.5.5.0+3-graalce", "41741c0650ae7564a78335f9e4fc353a902e6ff1d4140f2e4fabd1c55d5cce66");
@@ -42,7 +42,7 @@ public final class GraalVm {
      * @throws IOException when there's none with native-image
      * @since 1.11.0
      */
-    public static GraalVm find()
+    static GraalVm find()
     throws IOException {
         var home = System.getenv("GRAALVM_HOME");
         if (null == home || home.isBlank()) {
@@ -66,7 +66,7 @@ public final class GraalVm {
      * @return the directory
      * @since 1.11.0
      */
-    public File home() {
+    File home() {
         return home_;
     }
 
@@ -82,7 +82,7 @@ public final class GraalVm {
      * @throws IOException when GraalVM doesn't say it
      * @since 1.11.0
      */
-    public String runtime()
+    String runtime()
     throws IOException {
         for (var line : Files.readAllLines(new File(home_, "release").toPath())) {
             if (line.startsWith("JAVA_RUNTIME_VERSION=")) {
