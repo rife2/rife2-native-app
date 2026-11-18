@@ -53,7 +53,7 @@ public enum Target {
         return this == IOS_SIMULATOR || this == VISION_SIMULATOR;
     }
 
-    // the JDK libraries that native-jdk-libs builds for it, the ones for iOS on visionOS too
+    // the JDK libraries that app-jdk-libs builds for it, the ones for iOS on visionOS too
     String jdkLibraries() {
         return isSimulator() ? "iossim" : "ios";
     }

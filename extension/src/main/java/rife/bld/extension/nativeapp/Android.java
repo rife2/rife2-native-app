@@ -48,13 +48,13 @@ final class Android {
         return adb;
     }
 
-    // the libraries of the JDK for Android and the answers about its C types, which native-jdk-libs makes
+    // the libraries of the JDK for Android and the answers about its C types, which app-jdk-libs makes
     File libraries()
     throws IOException {
         var libraries = new File(settings_.jdkLibraries(), graalvm_.runtime() + "/android");
         if (!new File(libraries, "static").isDirectory() || !new File(libraries, "cap").isDirectory()) {
             throw new IOException("The JDK libraries for Android of the JDK " + graalvm_.runtime() + " aren't in " + libraries +
-                                  " yet: ./bld native-jdk-libs android");
+                                  " yet: ./bld app-jdk-libs android");
         }
         return libraries;
     }

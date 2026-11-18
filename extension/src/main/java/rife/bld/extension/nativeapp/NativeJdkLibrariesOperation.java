@@ -113,7 +113,7 @@ public class NativeJdkLibrariesOperation extends AbstractOperation<NativeJdkLibr
             "work", work.getAbsolutePath(),
             "tools", tools.getAbsolutePath()));
         if (target_ == Target.VISION || target_ == Target.VISION_SIMULATOR) {
-            throw new IllegalArgumentException("visionOS takes the JDK libraries for iOS: native-jdk-libs " + (target_.isSimulator() ? "ios-sim" : "ios"));
+            throw new IllegalArgumentException("visionOS takes the JDK libraries for iOS: app-jdk-libs " + (target_.isSimulator() ? "ios-sim" : "ios"));
         }
         if (target_.isIos()) {
             environment.put("out", new File(libraries, target_ == Target.IOS ? "ios" : "iossim").getAbsolutePath());

@@ -44,8 +44,8 @@ public class NativeAppProject extends WebProject {
      * @throws Exception when it can't be done
      * @since 1.11.0
      */
-    @BuildCommand(value = "native-library", summary = "Builds the site into a native library for an app: mac, ios, ios-sim, vision, vision-sim or android")
-    public void nativeLibrary()
+    @BuildCommand(value = "app-library", summary = "Builds the site into a native library for an app: mac, ios, ios-sim, vision, vision-sim or android")
+    public void appLibrary()
     throws Exception {
         var target = target();
         jar();
@@ -58,8 +58,8 @@ public class NativeAppProject extends WebProject {
      * @throws Exception when it can't be done
      * @since 1.11.0
      */
-    @BuildCommand(value = "native-check", summary = "Checks that the native library answers like the JVM: mac, ios-sim, vision-sim or android")
-    public void nativeCheck()
+    @BuildCommand(value = "app-check", summary = "Checks that the native library answers like the JVM: mac, ios-sim, vision-sim or android")
+    public void appCheck()
     throws Exception {
         var target = target();
         jar();
@@ -72,8 +72,8 @@ public class NativeAppProject extends WebProject {
      * @throws Exception when it can't be done
      * @since 1.11.0
      */
-    @BuildCommand(value = "native-jdk-libs", summary = "Builds the JDK libraries that native libraries for ios, ios-sim or android need")
-    public void nativeJdkLibraries()
+    @BuildCommand(value = "app-jdk-libs", summary = "Builds the JDK libraries that native libraries for ios, ios-sim or android need")
+    public void appJdkLibraries()
     throws Exception {
         new NativeJdkLibrariesOperation().fromProject(this).target(target()).execute();
     }

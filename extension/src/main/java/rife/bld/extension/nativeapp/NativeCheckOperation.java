@@ -102,7 +102,7 @@ public class NativeCheckOperation extends AbstractOperation<NativeCheckOperation
             throw new IllegalStateException("The build names no addresses to check: nativeApp().addresses(...)");
         }
         if (target_ == Target.IOS || target_ == Target.VISION) {
-            throw new IllegalArgumentException("A library for devices is checked in the simulator: native-check " + target_.argument() + "-sim");
+            throw new IllegalArgumentException("A library for devices is checked in the simulator: app-check " + target_.argument() + "-sim");
         }
 
         Platform.requireMac();
@@ -111,7 +111,7 @@ public class NativeCheckOperation extends AbstractOperation<NativeCheckOperation
         var out = NativeLibraryOperation.directory(project_, target_);
         var name = site.libraryName();
         if (!new File(out, target_ == Target.ANDROID ? "lib" + name + ".so" : name + ".framework").exists()) {
-            throw new IllegalStateException("There's no library for " + target_.argument() + " in " + out + " yet: native-library " + target_.argument());
+            throw new IllegalStateException("There's no library for " + target_.argument() + " in " + out + " yet: app-library " + target_.argument());
         }
         var check = new File(out, "check");
         Commands.delete(check);

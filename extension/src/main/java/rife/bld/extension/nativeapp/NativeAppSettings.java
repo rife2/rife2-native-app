@@ -82,7 +82,7 @@ public class NativeAppSettings {
     /**
      * Addresses that the site is asked for on the JVM before every native
      * build, which shows what's wrong in seconds rather than after it, and
-     * which {@code native-check} asks the native library for as well.
+     * which {@code app-check} asks the native library for as well.
      * Their answers have to be the same each time, so a page with a CSRF
      * token or the time in it isn't one of them.
      *
@@ -107,7 +107,7 @@ public class NativeAppSettings {
 
     /**
      * A property that the site is told when it's asked on the JVM and by
-     * {@code native-check}, like an app would tell it.
+     * {@code app-check}, like an app would tell it.
      *
      * @param name the name of the property
      * @param value its value
@@ -292,7 +292,7 @@ public class NativeAppSettings {
     }
 
     /**
-     * The simulator that {@code native-check ios-sim} runs in.
+     * The simulator that {@code app-check ios-sim} runs in.
      *
      * @param name the name of the simulator
      * @return these settings
@@ -304,9 +304,9 @@ public class NativeAppSettings {
     }
 
     /**
-     * The simulator that {@code native-check ios-sim} runs in.
+     * The simulator that {@code app-check ios-sim} runs in.
      *
-     * @return the simulator that {@code native-check ios-sim} runs in
+     * @return the simulator that {@code app-check ios-sim} runs in
      * @since 1.11.0
      */
     public String simulator() {
@@ -314,7 +314,7 @@ public class NativeAppSettings {
     }
 
     /**
-     * The simulator that {@code native-check vision-sim} runs in.
+     * The simulator that {@code app-check vision-sim} runs in.
      *
      * @param name the name of the simulator
      * @return these settings
@@ -326,9 +326,9 @@ public class NativeAppSettings {
     }
 
     /**
-     * The simulator that {@code native-check vision-sim} runs in.
+     * The simulator that {@code app-check vision-sim} runs in.
      *
-     * @return the simulator that {@code native-check vision-sim} runs in
+     * @return the simulator that {@code app-check vision-sim} runs in
      * @since 1.11.0
      */
     public String visionSimulator() {

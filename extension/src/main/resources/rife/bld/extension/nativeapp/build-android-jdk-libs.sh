@@ -16,7 +16,7 @@
 #
 #   build-android-jdk-libs.sh
 #
-# run by `./bld native-jdk-libs android` of bld-native-app, with java_home, work, out and tools as
+# run by `./bld app-jdk-libs android` of bld-native-app, with java_home, work, out and tools as
 # for build-ios-jdk-libs.sh, and api, toolchain, compiler and adb of the NDK and the SDK, in the
 # environment. Needs what build-ios-jdk-libs.sh needs, and that it ran once.
 set -euo pipefail
@@ -30,7 +30,7 @@ runtime=$(sed -n 's/^JAVA_RUNTIME_VERSION="\(.*\)"/\1/p' "$java_home/release")
 # the sources of this GraalVM's JDK and of GraalVM itself, which a run for iOS fetches
 graal_commit=$(sed -n 's/^SOURCE=.* substratevm:\([0-9a-f]*\).*/\1/p' "$java_home/release")
 if [ "$(cat "$work/src/.ios-port" 2>/dev/null)" != "jdk-${runtime%%-*}" ] || [ "$(git -C "$work/graal" rev-parse HEAD 2>/dev/null)" != "$graal_commit" ]; then
-    echo "./bld native-jdk-libs ios-sim or ios has to run first with this GraalVM: it fetches the sources of its JDK and of GraalVM" >&2
+    echo "./bld app-jdk-libs ios-sim or ios has to run first with this GraalVM: it fetches the sources of its JDK and of GraalVM" >&2
     exit 1
 fi
 # what native-image asks about Android's C types is answered on an Android, before anything is replaced

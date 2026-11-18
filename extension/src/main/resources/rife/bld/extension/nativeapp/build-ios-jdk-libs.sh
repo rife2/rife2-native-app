@@ -3,7 +3,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License")
 
 # Builds for iOS the static libraries that native-image links into every image and that GraalVM
-# only ships for macOS, run by `./bld native-jdk-libs ios|ios-sim` of bld-native-app:
+# only ships for macOS, run by `./bld app-jdk-libs ios|ios-sim` of bld-native-app:
 #
 # * those of the JDK (libjava, libnio, libnet, libzip and the others), from the sources of the
 #   exact JDK inside the GraalVM in use, with the iOS port of OpenJDK's mobile project applied

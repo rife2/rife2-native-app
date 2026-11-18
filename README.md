@@ -308,7 +308,7 @@ bld.repositories=MAVEN_CENTRAL,RIFE2_SNAPSHOTS,RIFE2_RELEASES
 
 Its build class extends `NativeAppProject` instead of `WebProject`. A native
 image can't compile templates while it runs, so the build precompiles them,
-and `native-library` stops when there are templates of a type that it
+and `app-library` stops when there are templates of a type that it
 doesn't. The native library has all of them, rendered by a check or not. The
 site is asked on the JVM before each build, which needs the servlet API that
 RIFE2's interfaces name, but no servlet container:
@@ -343,24 +343,24 @@ in RIFE2's wiki describes, since a native image has no java agent.
 |---|---|
 | `libraryName(name)` | the name of the library and its framework, `mysite` for `libmysite.so` and `mysite.framework`; the name of the project when it's not set |
 | `bundleIdentifier(identifier)` | the bundle identifier of the framework; the package of the project with `.site` when it's not set |
-| `addresses(addresses...)` | the addresses that the site is asked for before each build and by `native-check` |
+| `addresses(addresses...)` | the addresses that the site is asked for before each build and by `app-check` |
 | `walk(mainClass, arguments...)` | a class whose `main` goes through the site as the app does, with GraalVM's tracing agent |
-| `property(name, value)` | a property that the site is told on the JVM and by `native-check`, like the app would tell it |
+| `property(name, value)` | a property that the site is told on the JVM and by `app-check`, like the app would tell it |
 | `privacyManifest(file)` | the privacy manifest of the framework; without one, it's written from what the library's code uses |
-| `simulator(name)` | the simulator of `native-check ios-sim`, `iPhone 17` unless it's set |
-| `visionSimulator(name)` | the simulator of `native-check vision-sim`, `Apple Vision Pro` unless it's set |
+| `simulator(name)` | the simulator of `app-check ios-sim`, `iPhone 17` unless it's set |
+| `visionSimulator(name)` | the simulator of `app-check vision-sim`, `Apple Vision Pro` unless it's set |
 | `androidSdk(directory)` | the Android SDK; `ANDROID_HOME`, or `~/Library/Android/sdk`, when it's not set |
 | `androidNdk(version)` | the version of the NDK in that SDK, `28.2.13676358` unless it's set |
 | `androidApi(level)` | the oldest Android that the library runs on, 29 unless it's set |
-| `jdkLibraries(directory)` | where `native-jdk-libs` keeps what it builds; `RIFE2_NATIVE_JDK_LIBS`, or `~/.rife2/native-app/jdk-libs`, when it's not set |
+| `jdkLibraries(directory)` | where `app-jdk-libs` keeps what it builds; `RIFE2_NATIVE_JDK_LIBS`, or `~/.rife2/native-app/jdk-libs`, when it's not set |
 
 A build that extends another subclass of `WebProject` than
 `NativeAppProject` uses the operations of the commands itself, in commands
 of its own that make the jar first:
 
 ```java
-@BuildCommand(value = "native-library")
-public void nativeLibrary()
+@BuildCommand(value = "app-library")
+public void appLibrary()
 throws Exception {
     jar();
     new NativeLibraryOperation().fromProject(this)
@@ -377,9 +377,9 @@ That adds three commands, which run on a Mac, for these targets:
 
 | Command | What it does |
 |---|---|
-| `./bld native-library mac\|ios\|ios-sim\|vision\|vision-sim\|android` | builds `build/native/<target>/`: a framework for Apple's systems, with a privacy manifest that declares what its code uses, or a shared library for Android with the bridge linked in. For iOS and visionOS it also makes `build/native/<name>.xcframework` of the frameworks for their devices and simulators that were built, which Xcode links |
-| `./bld native-check mac\|ios-sim\|vision-sim\|android` | asks the native library for the addresses of `nativeApp().addresses()`, on this Mac, in a simulator (which it boots and shuts down again when it wasn't running) or on what adb sees, and compares its answers with the JVM's |
-| `./bld native-jdk-libs ios\|ios-sim\|android` | builds the JDK libraries that iOS and Android need and GraalVM doesn't ship, once for every app on this Mac; `android` uses the sources that a run for iOS fetched |
+| `./bld app-library mac\|ios\|ios-sim\|vision\|vision-sim\|android` | builds `build/native/<target>/`: a framework for Apple's systems, with a privacy manifest that declares what its code uses, or a shared library for Android with the bridge linked in. For iOS and visionOS it also makes `build/native/<name>.xcframework` of the frameworks for their devices and simulators that were built, which Xcode links |
+| `./bld app-check mac\|ios-sim\|vision-sim\|android` | asks the native library for the addresses of `nativeApp().addresses()`, on this Mac, in a simulator (which it boots and shuts down again when it wasn't running) or on what adb sees, and compares its answers with the JVM's |
+| `./bld app-jdk-libs ios\|ios-sim\|android` | builds the JDK libraries that iOS and Android need and GraalVM doesn't ship, once for every app on this Mac; `android` uses the sources that a run for iOS fetched |
 
 GraalVM has no target for visionOS, so a library for it is built as one for
 iOS is, with the JDK libraries for iOS under the platform of visionOS, and
@@ -395,7 +395,7 @@ app tells it, so pages include their script. An address that the site
 answers with a server error stops the build; a 404, like `/nothing-here`
 above, is checked like any other answer. An address whose answer changes
 each time, like a page with a CSRF token, can't be checked by
-`native-check`, and is better left to the walk, as is an event stream,
+`app-check`, and is better left to the walk, as is an event stream,
 which the checks end with its request.
 
 The walk is a class of the site's own sources, in `src/main/java`, which
@@ -422,9 +422,9 @@ It builds with the GraalVM of `GRAALVM_HOME` when that's set, or else
 GraalVM Community Edition 25.5 as sdkman installs it
 (`sdk install java 25.5.5.0+3-graalce`), in `SDKMAN_DIR` or `~/.sdkman`.
 Android only builds with that exact version, since the container that builds it downloads the same
-one for Linux and checks it, and `native-jdk-libs` only with a GraalVM of
+one for Linux and checks it, and `app-jdk-libs` only with a GraalVM of
 JDK 25. It also needs Xcode with its command line tools, and python3.
-Without the JDK libraries that `native-jdk-libs` builds, a library for iOS
+Without the JDK libraries that `app-jdk-libs` builds, a library for iOS
 is built with stand-ins, the macOS libraries with the platform of their
 object files rewritten, which is fine in the simulator; a library for a
 device that ships uses the real ones. Those are built from the sources of
@@ -437,9 +437,9 @@ container, the NDK, and an emulator or a device to answer what native-image
 asks about Android's C types. The first library for Android is built in
 this order:
 
-1. `./bld native-jdk-libs ios-sim`, which fetches the sources of the JDK
-2. `./bld native-jdk-libs android`, with the emulator or the device running
-3. `./bld native-library android`
+1. `./bld app-jdk-libs ios-sim`, which fetches the sources of the JDK
+2. `./bld app-jdk-libs android`, with the emulator or the device running
+3. `./bld app-library android`
 
 ## Checking a site
 
@@ -457,7 +457,7 @@ property `rife.nativeapp.saved` names a directory that gets each answer as
 a file. `checks/ask.c`, linked
 with the native library, prints the status, size and CRC-32 of the same
 addresses, as `address status size crc`, which the two can be compared by;
-`./bld native-check` does that.
+`./bld app-check` does that.
 
 From the project of the site, with this repository checked out beside it:
 

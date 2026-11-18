@@ -136,7 +136,7 @@ final class Apple {
     }
 
     // A copy of GraalVM with the JDK libraries for iOS where native-image
-    // looks for them: the ones that native-jdk-libs built, or else stand-ins,
+    // looks for them: the ones that app-jdk-libs built, or else stand-ins,
     // the macOS libraries with the platform of their object files rewritten,
     // which works since both run the same processor instructions. The copy
     // shares its files with the original until they change.
@@ -146,7 +146,7 @@ final class Apple {
         var runtime = graalvm.runtime();
         var built = new File(jdkLibraries, runtime + "/" + target.jdkLibraries());
         var prepared = new File(out.getParentFile(), "graalvm-" + platform);
-        // what native-jdk-libs left complete, it moves them in place at its end
+        // what app-jdk-libs left complete, it moves them in place at its end
         var libraries = new File(built, "clibraries/libjvm.a").isFile() ? "built " + new File(built, "static").lastModified() : "stand-ins";
         var stamp = new File(prepared, "ios-libraries");
         var release = new File(prepared, "release");
@@ -186,7 +186,7 @@ final class Apple {
         System.out.println("The JDK libraries for iOS: " + libraries.split(" ")[0] + ", for the JDK " + runtime);
         if (!target.isSimulator() && libraries.equals("stand-ins")) {
             System.err.println("Warning: this device build uses stand-ins, macOS code retagged for iOS. Build the real libraries with " +
-                               "./bld native-jdk-libs ios before you ship it.");
+                               "./bld app-jdk-libs ios before you ship it.");
         }
         return prepared;
     }
