@@ -139,10 +139,17 @@ public class NativeRequests {
         var answer = NativeSite.ask(context_, address, request.getMethod(), lines.toString(), body);
         // a page that's sent on is told so, see below; anything else, a file
         // or what a script asks for, is followed here
+        // with a GET, which has no body that these would describe
+        var followedLines = new StringBuilder();
+        for (var header : headers.entrySet()) {
+            if (!header.getKey().equalsIgnoreCase("Content-Type") && !header.getKey().equalsIgnoreCase("Content-Length")) {
+                followedLines.append(header.getKey()).append(": ").append(header.getValue()).append('\n');
+            }
+        }
         var from = address;
         for (var followed = 0; !page && followed < REDIRECTS && sentOn(from, answer) != null; ++followed) {
             from = sentOn(from, answer);
-            answer = NativeSite.ask(context_, from, "GET", lines.toString(), null);
+            answer = NativeSite.ask(context_, from, "GET", followedLines.toString(), null);
         }
         return response(answer, page);
     }

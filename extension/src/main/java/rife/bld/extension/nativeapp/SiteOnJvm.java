@@ -23,11 +23,13 @@ final class SiteOnJvm {
     private final WebProject project_;
     private final NativeAppSettings settings_;
     private final GraalVm graalvm_;
+    private final Target target_;
 
-    SiteOnJvm(WebProject project, NativeAppSettings settings, GraalVm graalvm) {
+    SiteOnJvm(WebProject project, NativeAppSettings settings, GraalVm graalvm, Target target) {
         project_ = project;
         settings_ = settings;
         graalvm_ = graalvm;
+        target_ = target;
     }
 
     String libraryName() {
@@ -41,6 +43,15 @@ final class SiteOnJvm {
 
     String bundleIdentifier() {
         return settings_.bundleIdentifier() != null ? settings_.bundleIdentifier() : project_.pkg() + ".site";
+    }
+
+    // a native image can't compile a template while it runs
+    void requirePrecompiledTemplates() {
+        var templates = project_.srcMainResourcesTemplatesDirectory();
+        if (templates.isDirectory() && !FileUtils.getFileList(templates).isEmpty() && project_.precompileOperation().templateTypes().isEmpty()) {
+            throw new IllegalStateException("The templates of " + templates + " are only in a native library when they're precompiled: " +
+                                            "precompileOperation().templateTypes(TemplateType.HTML, ...)");
+        }
     }
 
     // the scripts, styles and images of the site, which it serves from the classpath directory webapp
@@ -59,6 +70,10 @@ final class SiteOnJvm {
                 new File(webapp, file).delete();
             }
         }
+        // all of them, not only the ones that the tracing agent saw asked for
+        var config = new File(directory, "static/META-INF/native-image/rife2-native-app-static/resource-config.json");
+        config.getParentFile().mkdirs();
+        FileUtils.writeString("{\"resources\": {\"includes\": [{\"pattern\": \"\\\\Qwebapp/\\\\E.*\"}]}}\n", config);
         return webapp.getParentFile();
     }
 
@@ -150,9 +165,15 @@ final class SiteOnJvm {
         return answers;
     }
 
-    // what the site is told: the build's properties, with a directory of its own for what it keeps
+    // what the site is told: what the app of the target tells it, the
+    // build's properties, and a directory of its own for what it keeps
     java.util.Map<String, String> properties(File data) {
-        var properties = new java.util.LinkedHashMap<String, String>(settings_.properties());
+        var properties = new java.util.LinkedHashMap<String, String>();
+        properties.put("rife.nativeapp.platform", target_.platform());
+        if (target_ == Target.ANDROID) {
+            properties.put("rife.nativeapp.wholeAnswers", "true");
+        }
+        properties.putAll(settings_.properties());
         // each side keeps what it keeps apart
         properties.put("rife.nativeapp.data", data.getAbsolutePath());
         return properties;

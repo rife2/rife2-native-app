@@ -81,11 +81,19 @@ public final class NativeSchemeHandler: NSObject, WKURLSchemeHandler {
             }
             DispatchQueue.main.async {
                 if self.waiting[ObjectIdentifier(reply.task)] === reply {
-                    self.answer(NativeRequest(url: location, headers: request.headers),
+                    self.answer(NativeRequest(url: location, headers: Self.withoutBody(request.headers)),
                                 with: Reply(to: reply.task, from: self, redirects: reply.redirects + 1, at: followed))
                 }
             }
         }
+    }
+
+    // a redirect is followed with a GET, which has no body that these would describe
+    static func withoutBody(_ headers: String) -> String {
+        headers.split(separator: "\n").filter { line in
+            let name = line.split(separator: ":", maxSplits: 1).first?.trimmingCharacters(in: .whitespaces).lowercased()
+            return name != "content-type" && name != "content-length"
+        }.map { "\($0)\n" }.joined()
     }
 
     // What the web view is told of one request, on the main thread and only

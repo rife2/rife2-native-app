@@ -70,7 +70,8 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
         if (null == target_) throw new IllegalStateException("target() wasn't given a target");
 
         var graalvm = GraalVm.find();
-        var site = new SiteOnJvm(project_, project_.nativeApp(), graalvm);
+        var site = new SiteOnJvm(project_, project_.nativeApp(), graalvm, target_);
+        site.requirePrecompiledTemplates();
         var out = directory(project_, target_);
         Commands.delete(out);
         out.mkdirs();

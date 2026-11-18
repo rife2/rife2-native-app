@@ -32,6 +32,15 @@ public enum Target {
         return name_;
     }
 
+    // what the app tells the site, see NativeApp.PLATFORM
+    String platform() {
+        return switch (this) {
+            case MAC -> "mac";
+            case IOS, IOS_SIMULATOR -> "ios";
+            case ANDROID -> "android";
+        };
+    }
+
     boolean isIos() {
         return this == IOS || this == IOS_SIMULATOR;
     }

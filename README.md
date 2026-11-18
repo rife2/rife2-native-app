@@ -50,7 +50,8 @@ by a `rife.nativeapp.SiteProvider` instead, which the app names in
 ```java
 public class MyApp implements SiteProvider {
     public Site site(HierarchicalProperties properties) {
-        return new MySite(new File(properties.getValueString(NativeApp.DATA)));
+        // an app extension, and the JVM, aren't told a directory for what lasts
+        return new MySite(new File(properties.getValueString(NativeApp.DATA, "build/data")));
     }
 }
 ```
@@ -72,8 +73,8 @@ first: it has no display, and a native image on a Mac only draws images,
 like the ones that RIFE2's content management scales, without one.
 
 The scripts, styles and images of the site are served from the classpath
-directory `webapp`, which is where the native build puts `src/main/webapp`.
-They're only served for an address that no route of the site takes, so a
+directory `webapp`, which is where the native build puts all of
+`src/main/webapp`. They're only served for an address that no route of the site takes, so a
 route that takes every path keeps them, the script of the pages among them,
 from being served.
 
@@ -122,9 +123,13 @@ call. Each request has a number that no request had before, which
 ## The Swift package
 
 An iOS 17 or macOS 14 app adds this repository as a Swift package, with
-`branch: "master"` until it has a release to give as a version, and links
-the framework that native-image built from its site. Then a SwiftUI app
-shows the site with:
+`branch: "master"` until it has a release to give as a version. Its target
+also adds the framework that native-image built from its site to
+"Frameworks, Libraries, and Embedded Content" with "Embed & Sign":
+`build/native/mysite.xcframework` for iOS, which has the frameworks for
+devices and for the simulator that were built, so build both before an
+archive, or `build/native/mac/mysite.framework` for macOS. Then a SwiftUI
+app shows the site with:
 
 ```swift
 import RIFE2NativeApp
@@ -168,12 +173,17 @@ The site's library for Android has the bridge of
 `android/src/rife/nativeapp/android/rife2_native_app.c` linked into it, and
 the app has the classes of `rife.nativeapp.android`. They aren't published
 as a library yet: an app copies `android/src` into its sources, or adds it
-to them in its Gradle build, from a checkout of this repository:
+to them in its Gradle build, here from a checkout of this repository beside
+the app's project. They're written for Java 17:
 
 ```groovy
 android {
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
     sourceSets {
-        main.java.srcDirs += "../rife2-native-app/android/src"
+        main.java.srcDirs += "../../rife2-native-app/android/src"
     }
 }
 ```
@@ -223,7 +233,7 @@ public class MainActivity extends Activity {
 and declares the provider that hands a saved file to another app:
 
 ```xml
-<provider android:name="rife.nativeapp.android.NativeShared" android:authorities="com.example.app.rife2.files"
+<provider android:name="rife.nativeapp.android.NativeShared" android:authorities="${applicationId}.rife2.files"
           android:exported="false" android:grantUriPermissions="true"/>
 ```
 
@@ -269,8 +279,10 @@ bld.extensions=com.uwyn.rife2:bld-native-app:1.11.0-SNAPSHOT
 bld.repositories=MAVEN_CENTRAL,RIFE2_SNAPSHOTS,RIFE2_RELEASES
 ```
 
-Its build class extends `NativeAppProject` instead of `WebProject`. The site
-is asked on the JVM before each build, which needs the servlet API that
+Its build class extends `NativeAppProject` instead of `WebProject`. A native
+image can't compile templates while it runs, so the build precompiles them,
+and `native-library` stops when there are templates that it doesn't. The
+site is asked on the JVM before each build, which needs the servlet API that
 RIFE2's interfaces name, but no servlet container:
 
 ```java
@@ -282,13 +294,20 @@ public class MyBuild extends NativeAppProject {
             .include(dependency("com.uwyn.rife2", "rife2", version(1, 11, 0, "SNAPSHOT")));
         scope(provided)
             .include(dependency("jakarta.servlet", "jakarta.servlet-api", version(6, 0, 0)));
+        precompileOperation().templateTypes(TemplateType.HTML);
 
         nativeApp()
             .libraryName("mysite")
-            .addresses("/css/site.css", "/js/site.js", "/nothing-here");
+            .addresses("/", "/css/site.css", "/nothing-here")
+            .walk("com.example.Walk", "build/native/walk");
     }
 }
 ```
+
+A site that uses continuations, the workflow engine, meta-data merging or
+lazy-loading also has its classes instrumented ahead of time, as
+[GraalVM Native Image](https://github.com/rife2/rife2/wiki/GraalVM-Native-Image#ahead-of-time-instrumentation)
+in RIFE2's wiki describes, since a native image has no java agent.
 
 `nativeApp()` takes these:
 
@@ -317,14 +336,37 @@ That adds three commands, which run on a Mac, for these targets:
 Before every native build, the site is asked for those addresses on the
 JVM, and goes through the `main` of `nativeApp().walk(...)` when there is
 one, with GraalVM's tracing agent, which records what the library needs
-that native-image can't see by itself. An address that the site answers
-with an error stops the build. An address whose answer changes each time,
-like a page with a CSRF token, can't be checked.
+that native-image can't see by itself, like the classes that RIFE2 finds by
+reflection for a page. The site is told the platform of the target, as the
+app tells it, so pages include their script. An address that the site
+answers with a server error stops the build; a 404, like `/nothing-here`
+above, is checked like any other answer. An address whose answer changes
+each time, like a page with a CSRF token, can't be checked by
+`native-check`, and is better left to the walk.
 
-It builds with GraalVM Community Edition 25.5 as sdkman installs it
-(`sdk install java 25.5.5.0+3-graalce`), in `SDKMAN_DIR` or `~/.sdkman`, or
-the GraalVM of `GRAALVM_HOME` for macOS and iOS. Android only builds with
-that exact version, since the container that builds it downloads the same
+The walk is a class of the site's own sources, in `src/main/java`, which
+asks for what the app would, posts included:
+
+```java
+public class Walk {
+    public static void main(String[] arguments) {
+        var app = new NativeApp()
+            .property(NativeApp.PLATFORM, "ios")
+            .property(NativeApp.DATA, arguments[0]);
+        var runner = app.runner();
+        runner.handle("/");
+        runner.handle("/orders", new SiteRequest(RequestMethod.POST)
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body("title=Leaking+tap"));
+        app.stop();
+    }
+}
+```
+
+It builds with the GraalVM of `GRAALVM_HOME` when that's set, or else
+GraalVM Community Edition 25.5 as sdkman installs it
+(`sdk install java 25.5.5.0+3-graalce`), in `SDKMAN_DIR` or `~/.sdkman`.
+Android only builds with that exact version, since the container that builds it downloads the same
 one for Linux and checks it, and `native-jdk-libs` only with a GraalVM of
 JDK 25. It also needs Xcode with its command line tools, and python3.
 Without the JDK libraries that `native-jdk-libs` builds, a library for iOS
@@ -333,19 +375,27 @@ object files rewritten, which is fine in the simulator; a library for a
 device that ships uses the real ones. Those are built from the sources of
 the JDK in GraalVM with the port of OpenJDK's mobile project, which needs
 autoconf and GNU make (`brew install autoconf make`) and takes about ten
-minutes the first time. Android also needs Docker, since native-image
-builds for it in a Linux container, the NDK, and an emulator or a device
-to answer what native-image asks about Android's C types.
+minutes the first time.
+
+Android also needs Docker, since native-image builds for it in a Linux
+container, the NDK, and an emulator or a device to answer what native-image
+asks about Android's C types. The first library for Android is built in
+this order:
+
+1. `./bld native-jdk-libs ios-sim`, which fetches the sources of the JDK
+2. `./bld native-jdk-libs android`, with the emulator or the device running
+3. `./bld native-library android`
 
 ## Checking a site
 
 On the JVM, before a native build:
 
 ```console
-java -cp "<the site's classpath>" rife.nativeapp.NativeApp -Dmy.setting=value /some/page /another
+java -cp "<the site's classpath>:build/native/mac/static" rife.nativeapp.NativeApp -Dmy.setting=value /some/page /another
 ```
 
-prints the status, size and CRC-32 of each answer; a `-Dname=value` sets a
+where `build/native/<target>/static` is the copy of `src/main/webapp` that
+the native build made, prints the status, size and CRC-32 of each answer; a `-Dname=value` sets a
 property of the site first, and the system property `rife.nativeapp.saved`
 names a directory that gets each answer as a file. `checks/ask.c`, linked
 with the native library, prints the status, size and CRC-32 of the same
@@ -363,7 +413,12 @@ what adb sees, and goes through it: each step waits until the screen shows
 a text, or taps it. It needs build-tools 35.0.0 and platform 35 in the
 Android SDK.
 
-## Javadocs
+## More
+
+RIFE2's wiki has what a site needs for a native image, on
+[GraalVM Native Image](https://github.com/rife2/rife2/wiki/GraalVM-Native-Image),
+and how a site runs without a server, on
+[Site Runner](https://github.com/rife2/rife2/wiki/Site-Runner).
 
 The javadocs of the bld extension are at https://rife2.github.io/rife2-native-app/,
 and those of `rife.nativeapp` are in RIFE2's at https://rife2.github.io/rife2/.

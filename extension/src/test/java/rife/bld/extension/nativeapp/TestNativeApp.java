@@ -45,6 +45,57 @@ class TestNativeApp {
     }
 
     @Test
+    void testChecksAreToldWhatTheAppTellsTheSite() {
+        var ios = site(new NativeAppSettings()).properties(new File("data"));
+        assertEquals("ios", ios.get("rife.nativeapp.platform"));
+        assertNull(ios.get("rife.nativeapp.wholeAnswers"));
+        var project = new WebProject();
+        var android = new SiteOnJvm(project, new NativeAppSettings(), null, Target.ANDROID).properties(new File("data"));
+        assertEquals("android", android.get("rife.nativeapp.platform"));
+        assertEquals("true", android.get("rife.nativeapp.wholeAnswers"));
+        assertEquals("mac", new SiteOnJvm(project, new NativeAppSettings(), null, Target.MAC).properties(new File("data")).get("rife.nativeapp.platform"));
+        // what the build says wins
+        assertEquals("mac", site(new NativeAppSettings().property("rife.nativeapp.platform", "mac")).properties(new File("data")).get("rife.nativeapp.platform"));
+    }
+
+    @Test
+    void testEveryStaticFileIsEmbedded(@TempDir Path temp)
+    throws Exception {
+        var project = new WebProject() {
+            {
+                workDirectory = temp.toFile();
+            }
+        };
+        var file = new File(project.srcMainWebappDirectory(), "js/unasked.js");
+        file.getParentFile().mkdirs();
+        Files.writeString(file.toPath(), "unasked");
+        var staged = new SiteOnJvm(project, new NativeAppSettings(), null, Target.MAC).stage(temp.resolve("out").toFile());
+        assertEquals("unasked", Files.readString(staged.toPath().resolve("webapp/js/unasked.js")));
+        var config = Files.readString(staged.toPath().resolve("META-INF/native-image/rife2-native-app-static/resource-config.json"));
+        var pattern = java.util.regex.Pattern.compile(config.replaceAll("(?s).*\"pattern\": \"(.*)\".*", "$1").replace("\\\\", "\\"));
+        assertTrue(pattern.matcher("webapp/js/unasked.js").matches(), config);
+        assertFalse(pattern.matcher("templates/home.class").matches(), config);
+    }
+
+    @Test
+    void testTemplatesHaveToBePrecompiled(@TempDir Path temp)
+    throws Exception {
+        var project = new WebProject() {
+            {
+                workDirectory = temp.toFile();
+            }
+        };
+        var site = new SiteOnJvm(project, new NativeAppSettings(), null, Target.MAC);
+        site.requirePrecompiledTemplates();
+        var template = new File(project.srcMainResourcesTemplatesDirectory(), "home.html");
+        template.getParentFile().mkdirs();
+        Files.writeString(template.toPath(), "<html></html>");
+        assertThrows(IllegalStateException.class, site::requirePrecompiledTemplates);
+        project.precompileOperation().templateTypes(rife.bld.operations.TemplateType.HTML);
+        site.requirePrecompiledTemplates();
+    }
+
+    @Test
     void testTargets() {
         assertEquals(Target.IOS_SIMULATOR, Target.from("ios-sim"));
         assertEquals(Target.ANDROID, Target.from("android"));
@@ -58,7 +109,7 @@ class TestNativeApp {
                 pkg = "com.example";
             }
         };
-        return new SiteOnJvm(project, settings, null);
+        return new SiteOnJvm(project, settings, null, Target.IOS_SIMULATOR);
     }
 
     @Test

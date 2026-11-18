@@ -35,3 +35,17 @@ jobs:
 
       - name: Run tests
         run: ./bld test
+
+  build-swift:
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout source repository
+        uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 0
+
+      - name: Build the Swift package
+        run: swift build

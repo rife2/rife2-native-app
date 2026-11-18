@@ -12,6 +12,6 @@
 /extension/lib/standalone/
 /extension/lib/test/
 /extension/local.properties
-.idea/**/usage.statistics.xml
-.idea/**/dictionaries
-.idea/**/tasks.xml
+/extension/.idea/**/usage.statistics.xml
+/extension/.idea/**/dictionaries
+/extension/.idea/**/tasks.xml
