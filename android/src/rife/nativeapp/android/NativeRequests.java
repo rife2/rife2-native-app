@@ -43,6 +43,14 @@ public class NativeRequests {
     }
 
     private final Context context_;
+    // the answer of a page that the web view makes a download of, which it
+    // then hands to its download listener without the answer
+    private final Map<String, NativeSite.Answer> downloads_ = Collections.synchronizedMap(new LinkedHashMap<>() {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, NativeSite.Answer> eldest) {
+            return size() > 4;
+        }
+    });
     private final Map<String, Posted> posted_ = Collections.synchronizedMap(new LinkedHashMap<>() {
         @Override
         protected boolean removeEldestEntry(Map.Entry<String, Posted> eldest) {
@@ -83,6 +91,11 @@ public class NativeRequests {
      * check that looks at what a web view hands over.
      */
     protected void handed(String method, String address, String type, byte[] body) {
+    }
+
+    // the answer that a download of the web view was made of, once
+    NativeSite.Answer downloaded(String address) {
+        return downloads_.remove(address);
     }
 
     // where the site sends a request on to, when that's an address of its own
@@ -137,6 +150,10 @@ public class NativeRequests {
         }
         var page = request.isForMainFrame();
         var answer = NativeSite.ask(context_, address, request.getMethod(), lines.toString(), body);
+        var disposition = answer.header("Content-Disposition");
+        if (page && disposition != null && disposition.toLowerCase(java.util.Locale.ROOT).startsWith("attachment")) {
+            downloads_.put(address, answer);
+        }
         // a page that's sent on is told so, see below; anything else, a file
         // or what a script asks for, is followed here
         // a redirect is followed with a GET, which has no body for these headers to describe
@@ -151,7 +168,7 @@ public class NativeRequests {
             from = sentOn(from, answer);
             answer = NativeSite.ask(context_, from, "GET", followedLines.toString(), null);
         }
-        return response(answer, page);
+        return response(answer, page, from);
     }
 
     // a line break, in what a page says it posts for instance, would tell the site another header
@@ -159,7 +176,7 @@ public class NativeRequests {
         return text.replaceAll("[\\r\\n]+", " ");
     }
 
-    private static WebResourceResponse response(NativeSite.Answer answer, boolean page) {
+    private static WebResourceResponse response(NativeSite.Answer answer, boolean page, String address) {
         if (answer.failure != null) {
             Log.w("rife2", answer.failure);
             // a page that isn't there would leave the screen empty, so it says why instead
@@ -186,7 +203,12 @@ public class NativeRequests {
         // of the page would be wrong.
         if (page && status >= 300 && status < 400 && location != null) {
             // a browser refuses to be sent to a script or to data, which would run as the site
-            var scheme = Uri.parse(location).getScheme();
+            String scheme;
+            try {
+                scheme = java.net.URI.create(address).resolve(location).getScheme();
+            } catch (IllegalArgumentException e) {
+                scheme = "unusable";
+            }
             if (scheme != null && !scheme.equalsIgnoreCase("http") && !scheme.equalsIgnoreCase("https")) {
                 return new WebResourceResponse("text/plain", "UTF-8", 502, "Bad Gateway", Map.of("Cache-Control", "no-store"), new ByteArrayInputStream(new byte[0]));
             }

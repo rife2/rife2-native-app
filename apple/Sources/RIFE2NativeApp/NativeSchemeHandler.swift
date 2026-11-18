@@ -133,7 +133,8 @@ public final class NativeSchemeHandler: NSObject, WKURLSchemeHandler {
             root = handler.site.root
             url = task.request.url!
             base = followed ?? url
-            page = task.request.mainDocumentURL == url
+            // what a script of the page asks for at the page's own address isn't the page
+            page = task.request.mainDocumentURL == url && (task.request.value(forHTTPHeaderField: "Accept") ?? "").hasPrefix("text/html")
             NativeSchemeHandler.replies.withLock { $0 += 1 }
         }
 

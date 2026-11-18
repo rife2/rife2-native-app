@@ -207,10 +207,11 @@ public class NativePages {
                     // a page that stops it each time is loaded again later, longer each time
                     var now = android.os.SystemClock.elapsedRealtime();
                     waited_ = now - replaced_ < 10_000 ? Math.min(Math.max(waited_ * 2, 10_000), 300_000) : 0;
-                    replaced_ = now;
                     var replacement = view_;
                     shown.postDelayed(() -> {
                         if (replacement == view_) {
+                            // since the page was loaded again, not since it stopped, so that the wait grows
+                            replaced_ = android.os.SystemClock.elapsedRealtime();
                             replacement.loadUrl(at_);
                         }
                     }, waited_);
@@ -239,9 +240,15 @@ public class NativePages {
         view.setDownloadListener((url, agent, disposition, type, length) -> {
             if (NativeSite.own(activity, Uri.parse(url))) {
                 WRITING.execute(() -> {
-                    var answer = NativeSite.ask(activity, url, "GET", "", null);
+                    // what the web view already asked for, which isn't asked again
+                    var answer = requests_.downloaded(url);
+                    if (null == answer) {
+                        answer = NativeSite.ask(activity, url, "GET", "", null);
+                    }
                     if (null == answer.failure && answer.status == 200) {
                         offer(URLUtil.guessFileName(url, disposition, type), type, answer.body);
+                    } else {
+                        Log.w("rife2", "The file at " + url + " couldn't be saved: " + (null == answer.failure ? answer.status : answer.failure));
                     }
                 });
             }

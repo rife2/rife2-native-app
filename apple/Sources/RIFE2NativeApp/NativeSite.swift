@@ -183,6 +183,11 @@ public final class NativeSite: @unchecked Sendable {
 
     // Java only knows the threads that were attached to it, and several can be at a time.
     private static func entered(_ java: OpaquePointer, _ call: (OpaquePointer) -> Void) throws {
+        // a thread that's already in Java, one that tells a response, stays attached
+        if let inside = graal_get_current_thread(java) {
+            call(inside)
+            return
+        }
         var thread: OpaquePointer?
         guard graal_attach_thread(java, &thread) == 0, let thread else {
             throw NativeSiteError("A request couldn't reach the site's Java")

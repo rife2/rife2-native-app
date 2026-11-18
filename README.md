@@ -365,13 +365,13 @@ each time. Here the site has a route that takes the post to `/orders`:
 ```java
 public class Walk {
     public static void main(String[] arguments) {
-        var app = new NativeApp();
-        var runner = app.runner();
-        runner.handle("/");
-        runner.handle("/orders", new SiteRequest(RequestMethod.POST)
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .body("title=Leaking+tap"));
-        app.stop();
+        try (var app = new NativeApp()) {
+            var runner = app.runner();
+            runner.handle("/");
+            runner.handle("/orders", new SiteRequest(RequestMethod.POST)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .body("title=Leaking+tap"));
+        }
     }
 }
 ```

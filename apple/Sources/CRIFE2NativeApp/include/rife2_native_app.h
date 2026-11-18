@@ -35,6 +35,7 @@ typedef struct __graal_create_isolate_params_t graal_create_isolate_params_t;
 int graal_create_isolate(graal_create_isolate_params_t* params, graal_isolate_t** isolate, graal_isolatethread_t** thread);
 int graal_attach_thread(graal_isolate_t* isolate, graal_isolatethread_t** thread);
 int graal_detach_thread(graal_isolatethread_t* thread);
+graal_isolatethread_t* graal_get_current_thread(graal_isolate_t* isolate);
 #endif
 
 // The functions of rife.nativeapp.EntryPoints. A text is UTF-8 that ends

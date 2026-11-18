@@ -47,5 +47,13 @@ jobs:
           clean: true
           fetch-depth: 0
 
-      - name: Build the Swift package
+      - name: Build the Swift package for macOS
         run: swift build
+
+      - name: Build the Swift package for iOS
+        run: swift build --triple arm64-apple-ios17.0 --sdk "$(xcrun --sdk iphoneos --show-sdk-path)"
+
+      - name: Compile the classes for Android
+        run: |
+          platform=$(ls -d "$ANDROID_HOME"/platforms/android-* | sort -V | tail -1)
+          javac --release 17 -cp "$platform/android.jar" -d build/android android/src/rife/nativeapp/android/*.java checks/android/src/rife/nativeapp/check/MainActivity.java

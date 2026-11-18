@@ -216,6 +216,15 @@ open class NativePages: NSObject, ObservableObject, WKNavigationDelegate, WKUIDe
         ["http", "https", "mailto", "tel", "sms", "facetime"]
     }
 
+    // what the site answers as a file to save is saved, not shown
+    open func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse) async -> WKNavigationResponsePolicy {
+        let disposition = (response.response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Disposition") ?? ""
+        if disposition.lowercased().hasPrefix("attachment") || !response.canShowMIMEType {
+            return .download
+        }
+        return .allow
+    }
+
     // a link of the site that opens a new window shows its page here, there's one window
     open func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction,
                       windowFeatures: WKWindowFeatures) -> WKWebView? {
