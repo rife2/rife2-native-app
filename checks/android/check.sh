@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright 2026 Geert Bevin (gbevin[remove] at uwyn dot com)
+# Licensed under the Apache License, Version 2.0 (the "License")
+
 # Shows a site's native library for Android in an app made of the classes of rife2-native-app, on
 # the emulator or the device that adb sees, and goes through it: each step either waits until the
 # screen shows a text, or taps what shows a text.

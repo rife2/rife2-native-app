@@ -2,8 +2,7 @@
 [![Java](https://img.shields.io/badge/java-17%2B-blue)](https://www.oracle.com/java/technologies/javase/jdk17-archive-downloads.html)
 [![bld](https://img.shields.io/badge/3.0.1-FA9052?label=bld&labelColor=2392FF)](https://rife2.com/bld)
 [![Release](https://img.shields.io/github/release/rife2/rife2-native-app.svg)](https://github.com/rife2/rife2-native-app/releases/latest)
-[![Maven Central](https://img.shields.io/maven-central/v/com.uwyn.rife2/rife2-native-app)](https://central.sonatype.com/artifact/com.uwyn.rife2/rife2-native-app)
-[![Snapshot](https://img.shields.io/maven-metadata/v?metadataUrl=https%3A%2F%2Frepo.rife2.com%2Fsnapshots%2Fcom%2Fuwyn%2Frife2%2Frife2-native-app%2Fmaven-metadata.xml&label=snapshot)](https://repo.rife2.com/#/snapshots/com/uwyn/rife2/rife2-native-app)
+[![Snapshot](https://img.shields.io/maven-metadata/v?metadataUrl=https%3A%2F%2Frepo.rife2.com%2Fsnapshots%2Fcom%2Fuwyn%2Frife2%2Fbld-native-app%2Fmaven-metadata.xml&label=snapshot)](https://repo.rife2.com/#/snapshots/com/uwyn/rife2/bld-native-app)
 [![bld-ci](https://github.com/rife2/rife2-native-app/actions/workflows/bld.yml/badge.svg)](https://github.com/rife2/rife2-native-app/actions/workflows/bld.yml)
 
 # RIFE2 Native App
@@ -15,13 +14,22 @@ its pages from that library in the same process, without a server or a port.
 This is what [Gates of Humanity](https://hd.uwyn.com) does on the App Store,
 lifted out of it so that another app doesn't have to write it again.
 
+The part that runs inside the site is in RIFE2 itself, in the package
+`rife.nativeapp`, so a site needs nothing but the RIFE2 jar. This repository
+has what goes around it: the code of the apps, and what builds and checks
+the native library.
+
+Everything here runs on a Mac with Apple silicon, and builds for arm64:
+iOS devices and the simulator on that Mac, macOS, and Android devices and
+emulators of `arm64-v8a`.
+
 ## What's here
 
 | Part | What it does |
 |---|---|
-| `rife2-native-app` jar | the C functions that the app calls, around RIFE2's `SiteRunner`, and the script that the pages need inside an app |
 | `RIFE2NativeApp` Swift package | starts the site's Java in an iOS or macOS app and shows its pages in a web view |
 | `android/` | the classes that show the site in an Android app, and the bridge that's linked into the site's library |
+| `apple/` | the sources of the Swift package |
 | `extension/` | the bld extension `bld-native-app`, which builds the site into a native library and checks it |
 | `checks/ask.c` | asks a native library for addresses without an app, to compare its answers with the JVM's |
 | `checks/android/` | an app made of the Android classes only, which shows a native library and taps through it |
@@ -47,7 +55,7 @@ public class MyApp implements SiteProvider {
 }
 ```
 
-What the app tells the site arrives as properties, which a site can also
+These are classes of RIFE2's `rife.nativeapp`. What the app tells the site arrives as properties, which a site can also
 read in its `setup()`:
 
 | Property | What it is |
@@ -66,7 +74,7 @@ like the ones that RIFE2's content management scales, without one.
 The scripts, styles and images of the site are served from the classpath
 directory `webapp`, which is where the native build puts `src/main/webapp`.
 They're only served for an address that no route of the site takes, so a
-route that takes every path keeps them, the script of this jar among them,
+route that takes every path keeps them, the script of the pages among them,
 from being served.
 
 ## The pages
@@ -77,12 +85,17 @@ A template includes this in its `<head>`, after its viewport `<meta>`:
 <!--v context:nativeApp/-->
 ```
 
-In a browser, it's empty. Inside an app, it's the script of this jar, which
+In a browser, it's empty. Inside an app, it's the script of RIFE2's
+`rife.nativeapp`, which
 marks the page with the classes `in-app` and `on-<platform>`, and does what
 a web view doesn't do by itself: printing, and on Android also sharing,
 saving a file and handing over what a page posts.
 
 ## The C functions
+
+RIFE2's `rife.nativeapp.EntryPoints` has these, which native-image only
+exports when it builds a shared library; an executable of a site doesn't
+have them.
 
 ```c
 int rife2_abi(graal_isolatethread_t* thread);
@@ -98,8 +111,8 @@ void rife2_cancel(graal_isolatethread_t* thread, long long id);
 Texts are UTF-8 that ends with a zero, and headers are lines of a name, a
 colon and a value. A request tells the status and the headers once, the
 content as it's written, and once how it ended: 0 completed, 1 failed with
-why, or with `NULL` when there wasn't the memory to say why, 2 cancelled. A request that the site couldn't handle at all is only
-told that it failed. Nothing comes after the end, so that's where the app
+why, or with `NULL` when there wasn't the memory to say why, 2 cancelled.
+A request that the site couldn't handle at all is only told that it failed. Nothing comes after the end, so that's where the app
 lets go of its context. The text of a failure is only the app's during the
 call. Each request has a number that no request had before, which
 `rife2_cancel` takes; a cancel can come before its request.
@@ -107,9 +120,10 @@ call. Each request has a number that no request had before, which
 
 ## The Swift package
 
-An iOS or macOS app adds this repository as a Swift package and links the
-framework that native-image built from its site. Then a SwiftUI app shows the
-site with:
+An iOS 17 or macOS 14 app adds this repository as a Swift package, with
+`branch: "master"` until it has a release to give as a version, and links
+the framework that native-image built from its site. Then a SwiftUI app
+shows the site with:
 
 ```swift
 import RIFE2NativeApp
@@ -133,27 +147,38 @@ when the system stopped what draws it. An app changes or adds to that by
 subclassing it, for instance to add its own message handlers in
 `configure(_:)`.
 
+`NativeSite.scheme`, `NativeSite.host` and `NativeSite.properties` are set
+before the first page, when the app wants another address than `app://site`
+or has properties of its own for the site. `NativeSite.shared.get(path)`
+answers what's at a path all at once, for what isn't a page in a web view.
+
 An app extension, like a widget, links the package too and asks
 `NativeSite` for what it needs; the web view parts aren't available there.
 The site of an extension isn't told the platform, so its pages get no
-script, nor a directory for what lasts, so it keeps no cookies. watchOS has
-neither a web view nor a target of native-image: a watch app gets what it
-shows from the iPhone app, which asks its site.
-
-`NativeSite.scheme`, `NativeSite.host` and `NativeSite.properties` are set
-before the first page, when the app wants another address than `app://site`
-or has properties of its own for the site. An app extension, like a widget,
-starts the site with a heap of 16 MB, since iOS stops an extension that uses
-more than a few tens of megabytes; `NativeSite.arguments` changes that.
-`NativeSite.shared.get(path)` answers what's at a path all at once, for
-what isn't a page in a web view.
+script, nor a directory for what lasts, so it keeps no cookies. It starts
+the site with a heap of 16 MB, since iOS stops an extension that uses more
+than a few tens of megabytes; `NativeSite.arguments` changes that. watchOS
+has neither a web view nor a target of native-image: a watch app gets what
+it shows from the iPhone app, which asks its site.
 
 ## Android
 
 The site's library for Android has the bridge of
 `android/src/rife/nativeapp/android/rife2_native_app.c` linked into it, and
-the app has the classes of `rife.nativeapp.android`. An activity shows the
-site with:
+the app has the classes of `rife.nativeapp.android`. They aren't published
+as a library yet: an app copies `android/src` into its sources, or adds it
+to them in its Gradle build, from a checkout of this repository:
+
+```groovy
+android {
+    sourceSets {
+        main.java.srcDirs += "../rife2-native-app/android/src"
+    }
+}
+```
+
+The app puts `build/native/android/libmysite.so` in its `jniLibs/arm64-v8a`,
+needs API level 29 or later, and an activity shows the site with:
 
 ```java
 public class MainActivity extends Activity {
@@ -224,7 +249,7 @@ worker's requests don't reach the app.
 
 `android/resources/META-INF/proguard/rife2-native-app-android.pro` has the
 rules that keep R8 from removing what the native library calls by name. An
-app that shrinks its code with R8 uses them.
+app that shrinks its code with R8 adds it to its `proguardFiles`.
 
 A web view of Android doesn't hand over what a page posts. The script of
 the pages hands it to the app first, for `fetch`, an `XMLHttpRequest` that
@@ -234,21 +259,28 @@ nothing.
 
 ## Building the native library
 
-The bld extension builds the site with GraalVM's native-image. A build
-names it in `lib/bld/bld-wrapper.properties`:
+The bld extension builds the site with GraalVM's native-image. It's
+published to the RIFE2 repository, which a build names with the extension
+in `lib/bld/bld-wrapper.properties`:
 
 ```
 bld.extensions=com.uwyn.rife2:bld-native-app:1.11.0-SNAPSHOT
+bld.repositories=MAVEN_CENTRAL,RIFE2_SNAPSHOTS,RIFE2_RELEASES
 ```
 
-and its build class extends `NativeAppProject` instead of `WebProject`:
+Its build class extends `NativeAppProject` instead of `WebProject`. The site
+is asked on the JVM before each build, which needs the servlet API that
+RIFE2's interfaces name, but no servlet container:
 
 ```java
 public class MyBuild extends NativeAppProject {
     public MyBuild() {
         // ...
+        repositories = List.of(MAVEN_CENTRAL, RIFE2_SNAPSHOTS, RIFE2_RELEASES);
         scope(compile)
-            .include(dependency("com.uwyn.rife2", "rife2-native-app", version("1.11.0-SNAPSHOT")));
+            .include(dependency("com.uwyn.rife2", "rife2", version(1, 11, 0, "SNAPSHOT")));
+        scope(provided)
+            .include(dependency("jakarta.servlet", "jakarta.servlet-api", version(6, 0, 0)));
 
         nativeApp()
             .libraryName("mysite")
@@ -256,6 +288,22 @@ public class MyBuild extends NativeAppProject {
     }
 }
 ```
+
+`nativeApp()` takes these:
+
+| Setting | What it is |
+|---|---|
+| `libraryName(name)` | the name of the library and its framework, `mysite` for `libmysite.so` and `mysite.framework`; the name of the project when it's not set |
+| `bundleIdentifier(identifier)` | the bundle identifier of the framework; the package of the project with `.site` when it's not set |
+| `addresses(addresses...)` | the addresses that the site is asked for before each build and by `native-check` |
+| `walk(mainClass, arguments...)` | a class whose `main` goes through the site as the app does, with GraalVM's tracing agent |
+| `property(name, value)` | a property that the site is told on the JVM and by `native-check`, like the app would tell it |
+| `privacyManifest(file)` | the privacy manifest of the framework; without one, it's written from what the library's code uses |
+| `simulator(name)` | the simulator of `native-check ios-sim`, `iPhone 17` unless it's set |
+| `androidSdk(directory)` | the Android SDK; `ANDROID_HOME`, or `~/Library/Android/sdk`, when it's not set |
+| `androidNdk(version)` | the version of the NDK in that SDK, `28.2.13676358` unless it's set |
+| `androidApi(level)` | the oldest Android that the library runs on, 29 unless it's set |
+| `jdkLibraries(directory)` | where `native-jdk-libs` keeps what it builds; `RIFE2_NATIVE_JDK_LIBS`, or `~/.rife2/native-app/jdk-libs`, when it's not set |
 
 That adds three commands, which run on a Mac, for these targets:
 
@@ -273,7 +321,11 @@ with an error stops the build. An address whose answer changes each time,
 like a page with a CSRF token, can't be checked.
 
 It builds with GraalVM Community Edition 25.5 as sdkman installs it
-(`sdk install java 25.5.5.0+3-graalce`), or the GraalVM of `GRAALVM_HOME`.
+(`sdk install java 25.5.5.0+3-graalce`), in `SDKMAN_DIR` or `~/.sdkman`, or
+the GraalVM of `GRAALVM_HOME` for macOS and iOS. Android only builds with
+that exact version, since the container that builds it downloads the same
+one for Linux and checks it, and `native-jdk-libs` only with a GraalVM of
+JDK 25. It also needs Xcode with its command line tools, and python3.
 Without the JDK libraries that `native-jdk-libs` builds, a library for iOS
 is built with stand-ins, the macOS libraries with the platform of their
 object files rewritten, which is fine in the simulator; a library for a
@@ -293,23 +345,27 @@ java -cp "<the site's classpath>" rife.nativeapp.NativeApp -Dmy.setting=value /s
 ```
 
 prints the status, size and CRC-32 of each answer; a `-Dname=value` sets a
-property of the site first. `checks/ask.c`, linked
+property of the site first, and the system property `rife.nativeapp.saved`
+names a directory that gets each answer as a file. `checks/ask.c`, linked
 with the native library, prints the status, size and CRC-32 of the same
 addresses, as `address status size crc`, which the two can be compared by;
 `./bld native-check` does that.
 
+From the project of the site, with this repository checked out beside it:
+
 ```console
-checks/android/check.sh build/native/android/libmysite.so "see:Welcome" "tap:Sign in" "see:Your account"
+../rife2-native-app/checks/android/check.sh build/native/android/libmysite.so "see:Welcome" "tap:Sign in" "see:Your account"
 ```
 
 builds an app of the Android classes around a library, installs it on
 what adb sees, and goes through it: each step waits until the screen shows
-a text, or taps it.
+a text, or taps it. It needs build-tools 35.0.0 and platform 35 in the
+Android SDK.
 
 ## Javadocs
 
-The javadocs of the library are at https://rife2.github.io/rife2-native-app/,
-and those of the bld extension at https://rife2.github.io/rife2-native-app/extension/.
+The javadocs of the bld extension are at https://rife2.github.io/rife2-native-app/,
+and those of `rife.nativeapp` are in RIFE2's at https://rife2.github.io/rife2/.
 
 ## License
 

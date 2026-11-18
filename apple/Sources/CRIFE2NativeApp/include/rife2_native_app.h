@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Geert Bevin (gbevin[remove] at uwyn dot com)
+ * Licensed under the Apache License, Version 2.0 (the "License")
+ */
+
 #ifndef RIFE2_NATIVE_APP_H
 #define RIFE2_NATIVE_APP_H
 

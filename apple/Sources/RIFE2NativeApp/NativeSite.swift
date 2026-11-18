@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Geert Bevin (gbevin[remove] at uwyn dot com)
+ * Licensed under the Apache License, Version 2.0 (the "License")
+ */
+
 import CRIFE2NativeApp
 import Foundation
 import os
@@ -6,11 +11,16 @@ let log = Logger(subsystem: "com.uwyn.rife2.nativeapp", category: "site")
 
 /// A request for the site. Its headers are lines of a name, a colon and a value.
 public struct NativeRequest {
+    /// The address, of the site.
     public var url: String
+    /// The method, like `GET` or `POST`.
     public var method: String
+    /// The headers, a line each.
     public var headers: String
+    /// What's posted, when there's something.
     public var body: Data?
 
+    /// A request for an address of the site.
     public init(url: String, method: String = "GET", headers: String = "", body: Data? = nil) {
         self.url = url
         self.method = method
@@ -23,18 +33,27 @@ public struct NativeRequest {
 /// status and the headers once, the content as it's written, and once how it
 /// ended. Nothing comes after that.
 public protocol NativeResponse: AnyObject {
+    /// The status and the headers of the answer.
     func committed(status: Int, headers: [(name: String, value: String)])
+    /// Content of the answer, as the site writes it.
     func content(_ data: Data)
+    /// How the answer ended.
     func ended(_ how: NativeEnding)
 }
 
+/// How an answer of the site ended.
 public enum NativeEnding {
+    /// With all of the answer.
     case completed
+    /// Before all of the answer was given, and why.
     case failed(String)
+    /// Cancelled by the app.
     case cancelled
 }
 
+/// Why the site can't answer, like a library that didn't start.
 public struct NativeSiteError: Error, CustomStringConvertible {
+    /// What went wrong.
     public let description: String
 
     init(_ description: String) {
@@ -61,6 +80,7 @@ public final class NativeSite: @unchecked Sendable {
     /// iOS stops an extension that uses more than a few tens of megabytes.
     nonisolated(unsafe) public static var arguments: [String]? = nil
 
+    /// The site, started the first time it's used.
     public static let shared = NativeSite()
 
     /// The address of the site, like `app://site`.
@@ -122,7 +142,7 @@ public final class NativeSite: @unchecked Sendable {
             }
         }
         guard abi == 1 else {
-            throw NativeSiteError("The native library has the functions of another version of rife2-native-app: \(abi)")
+            throw NativeSiteError("The native library has the functions of another version of RIFE2: \(abi)")
         }
         return java
     }

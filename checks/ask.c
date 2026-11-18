@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Geert Bevin (gbevin[remove] at uwyn dot com)
+ * Licensed under the Apache License, Version 2.0 (the "License")
+ */
+
 /* Asks the site in a native library for addresses without an app around it,
    and prints the status, the size and a CRC-32 of each answer, which the JVM
    gives as well with rife.nativeapp.NativeApp. An argument -Dname=value sets

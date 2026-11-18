@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright 2026 Geert Bevin (gbevin[remove] at uwyn dot com)
+# Licensed under the Apache License, Version 2.0 (the "License")
+
 # Builds for iOS the static libraries that native-image links into every image and that GraalVM
 # only ships for macOS, run by `./bld native-jdk-libs ios|ios-sim` of bld-native-app:
 #

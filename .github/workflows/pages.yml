@@ -36,10 +36,8 @@ jobs:
           java-version: 17
 
       - name: Build Javadocs
-        run: |
-          ./bld clean download compile javadoc
-          (cd extension && ./bld clean download compile javadoc)
-          cp -R extension/build/javadoc build/javadoc/extension
+        working-directory: extension
+        run: ./bld clean download compile javadoc
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -47,7 +45,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: 'build/javadoc/'
+          path: 'extension/build/javadoc/'
 
       - name: Deploy to GitHub Pages
         id: deployment

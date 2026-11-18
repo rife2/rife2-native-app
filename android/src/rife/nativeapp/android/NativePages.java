@@ -50,8 +50,9 @@ import java.util.concurrent.Executors;
  * @since 1.11.0
  */
 public class NativePages {
-    /** The request codes of the activity results that {@link #chosen} takes. */
+    /** The request code of the activity result of a file that a page saved, which {@link #chosen} takes. */
     public static final int SAVED = 0x5201;
+    /** The request code of the activity result of files that a page asked for, which {@link #chosen} takes. */
     public static final int CHOSEN = 0x5202;
     private static final Set<String> INSIDE = Set.of("about", "blob", "data", "javascript");
     // what another app can't be handed, or what would let a page start anything
@@ -62,6 +63,7 @@ public class NativePages {
 
     /** What holds the web view, which is another one after Android stopped what draws the pages. */
     public final FrameLayout shown;
+    /** The activity that shows the pages. */
     protected final Activity activity;
     private NativeRequests requests_;
     private WebView view_;
@@ -283,7 +285,7 @@ public class NativePages {
         }
     }
 
-    // what a page asks of the app through the script of rife2-native-app, on a thread of the web view
+    // what a page asks of the app through the script of the pages, on a thread of the web view
     private final class Asked {
         @JavascriptInterface
         public void print() {

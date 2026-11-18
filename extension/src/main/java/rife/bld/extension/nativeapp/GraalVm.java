@@ -18,6 +18,12 @@ import java.util.Map;
  * @since 1.11.0
  */
 public final class GraalVm {
+    /**
+     * The GraalVM Community Edition that the libraries are built with, as
+     * sdkman names it.
+     *
+     * @since 1.11.0
+     */
     public static final String COMMUNITY = "25.5.5.0+3-graalce";
     // what sdkman has as these for Linux on arm64, which the Android build runs in
     private static final Map<String, String> LINUX_CHECKSUMS = Map.of(
@@ -52,6 +58,12 @@ public final class GraalVm {
         return graalvm;
     }
 
+    /**
+     * The directory of this GraalVM.
+     *
+     * @return the directory
+     * @since 1.11.0
+     */
     public File home() {
         return home_;
     }

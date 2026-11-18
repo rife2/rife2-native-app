@@ -28,11 +28,25 @@ public class NativeCheckOperation extends AbstractOperation<NativeCheckOperation
     private NativeAppProject project_;
     private Target target_;
 
+    /**
+     * The project whose site this is for.
+     *
+     * @param project the project
+     * @return this operation
+     * @since 1.11.0
+     */
     public NativeCheckOperation fromProject(NativeAppProject project) {
         project_ = project;
         return this;
     }
 
+    /**
+     * The system that this is for.
+     *
+     * @param target the target
+     * @return this operation
+     * @since 1.11.0
+     */
     public NativeCheckOperation target(Target target) {
         target_ = target;
         return this;
@@ -130,7 +144,7 @@ public class NativeCheckOperation extends AbstractOperation<NativeCheckOperation
     throws Exception {
         var sdk = Commands.output(check, List.of("xcrun", "--sdk", "iphonesimulator", "--show-sdk-path")).trim();
         var ask = new File(check, "ask");
-        Commands.run(check, List.of("xcrun", "--sdk", "iphonesimulator", "clang", "-O2", "-target", "arm64-apple-ios" + settings.minimumIos() + "-simulator",
+        Commands.run(check, List.of("xcrun", "--sdk", "iphonesimulator", "clang", "-O2", "-target", "arm64-apple-ios" + Apple.MINIMUM_IOS + "-simulator",
             "-isysroot", sdk, "-o", ask.getAbsolutePath(), Resources.extract("ask.c", check).getAbsolutePath(),
             "-I" + out.getAbsolutePath(), "-F" + out.getAbsolutePath(), "-framework", site.libraryName(), "-lz",
             "-Wl,-rpath," + out.getAbsolutePath()));

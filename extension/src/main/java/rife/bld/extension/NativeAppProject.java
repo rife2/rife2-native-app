@@ -10,9 +10,10 @@ import rife.bld.extension.nativeapp.*;
 
 /**
  * A web project whose site also runs inside an iOS, macOS or Android app,
- * with rife2-native-app. It adds the commands that build the site into a
- * native library, check that library against the JVM, and build the JDK
- * libraries that iOS and Android need; {@link #nativeApp()} says how.
+ * with RIFE2's {@code rife.nativeapp}. It adds the commands that build the
+ * site into a native library, check that library against the JVM, and
+ * build the JDK libraries that iOS and Android need; {@link #nativeApp()}
+ * says how.
  *
  * @author Geert Bevin (gbevin[remove] at uwyn dot com)
  * @since 1.11.0
@@ -34,6 +35,12 @@ public class NativeAppProject extends WebProject {
         return Target.from(arguments().remove(0));
     }
 
+    /**
+     * Builds the site into a native library for the target that the first argument names.
+     *
+     * @throws Exception when it can't be done
+     * @since 1.11.0
+     */
     @BuildCommand(value = "native-library", summary = "Builds the site into a native library for an app: mac, ios, ios-sim or android")
     public void nativeLibrary()
     throws Exception {
@@ -42,6 +49,12 @@ public class NativeAppProject extends WebProject {
         new NativeLibraryOperation().fromProject(this).target(target).execute();
     }
 
+    /**
+     * Checks that the native library of the target that the first argument names answers like the JVM.
+     *
+     * @throws Exception when it can't be done
+     * @since 1.11.0
+     */
     @BuildCommand(value = "native-check", summary = "Checks that the native library answers like the JVM: mac, ios-sim or android")
     public void nativeCheck()
     throws Exception {
@@ -50,6 +63,12 @@ public class NativeAppProject extends WebProject {
         new NativeCheckOperation().fromProject(this).target(target).execute();
     }
 
+    /**
+     * Builds the JDK libraries that native libraries for the target that the first argument names need.
+     *
+     * @throws Exception when it can't be done
+     * @since 1.11.0
+     */
     @BuildCommand(value = "native-jdk-libs", summary = "Builds the JDK libraries that native libraries for ios, ios-sim or android need")
     public void nativeJdkLibraries()
     throws Exception {

@@ -1,3 +1,6 @@
+# Copyright 2026 Geert Bevin (gbevin[remove] at uwyn dot com)
+# Licensed under the Apache License, Version 2.0 (the "License")
+
 # A Linux to build a site as a native library for Android in. native-image compiles the Java
 # classes of the JDK that it runs on, and Android has those of Linux, so it can't run on a Mac
 # for this. The GraalVM is the one that builds for the Mac, as sdkman has it for Linux on the

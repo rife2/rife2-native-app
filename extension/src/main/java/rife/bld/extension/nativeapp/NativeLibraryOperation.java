@@ -16,7 +16,7 @@ import java.util.List;
 
 /**
  * Builds the site of a project into a native library with GraalVM's
- * native-image, with the C functions of rife2-native-app that an app calls:
+ * native-image, with the C functions of RIFE2's {@code rife.nativeapp} that an app calls:
  * a framework for macOS, iOS and the iOS simulator, a shared library for
  * Android. It goes in {@code build/native/<target>}.
  *
@@ -27,11 +27,25 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
     private NativeAppProject project_;
     private Target target_;
 
+    /**
+     * The project whose site this is for.
+     *
+     * @param project the project
+     * @return this operation
+     * @since 1.11.0
+     */
     public NativeLibraryOperation fromProject(NativeAppProject project) {
         project_ = project;
         return this;
     }
 
+    /**
+     * The system that this is for.
+     *
+     * @param target the target
+     * @return this operation
+     * @since 1.11.0
+     */
     public NativeLibraryOperation target(Target target) {
         target_ = target;
         return this;
@@ -77,7 +91,7 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
     }
 
     private List<String> nativeImage(File tool, List<File> classpath, File configuration, File library) {
-        var command = new ArrayList<>(List.of(tool.getAbsolutePath(), "--no-fallback", "--shared", "-H:+UnlockExperimentalVMOptions"));
+        var command = new ArrayList<>(List.of(tool.getAbsolutePath(), "--shared", "-H:+UnlockExperimentalVMOptions"));
         if (configuration.isDirectory()) {
             command.add("-H:ConfigurationFileDirectories=" + configuration.getAbsolutePath());
         }
@@ -113,7 +127,7 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
     throws Exception {
         var simulator = target_ == Target.IOS_SIMULATOR;
         var settings = project_.nativeApp();
-        var triple = "arm64-apple-ios" + settings.minimumIos() + (simulator ? "-simulator" : "");
+        var triple = "arm64-apple-ios" + Apple.MINIMUM_IOS + (simulator ? "-simulator" : "");
         var sdk = Commands.output(out, List.of("xcrun", "--sdk", simulator ? "iphonesimulator" : "iphoneos", "--show-sdk-path")).trim();
         var prepared = Apple.graalvmForIos(graalvm, settings.jdkLibraries(), target_, out);
 
@@ -131,7 +145,7 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
         var binary = new File(framework, name);
         Files.move(new File(out, "lib" + name + ".dylib").toPath(), binary.toPath());
         Commands.run(out, List.of("install_name_tool", "-id", "@rpath/" + name + ".framework/" + name, binary.getAbsolutePath()));
-        FileUtils.writeString(Apple.infoPlist(site, project_.version().toString(), simulator ? "iPhoneSimulator" : "iPhoneOS", settings.minimumIos()),
+        FileUtils.writeString(Apple.infoPlist(site, project_.version().toString(), simulator ? "iPhoneSimulator" : "iPhoneOS", Apple.MINIMUM_IOS),
             new File(framework, "Info.plist"));
         Apple.privacyManifest(settings, binary, new File(framework, "PrivacyInfo.xcprivacy"));
         Commands.run(out, List.of("codesign", "-f", "-s", "-", framework.getAbsolutePath()));

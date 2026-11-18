@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 Geert Bevin (gbevin[remove] at uwyn dot com)
+# Licensed under the Apache License, Version 2.0 (the "License")
 """Rewrites the platform that object files say they were built for, in place, to make stand-ins
 for iOS of static libraries that only exist for macOS. Both run the same processor instructions.
 

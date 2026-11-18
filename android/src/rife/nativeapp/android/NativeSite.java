@@ -63,9 +63,11 @@ public final class NativeSite {
         private static final int COMPLETED = 0;
         private static final int FAILED = 1;
 
+        /** The status of the answer. */
         public int status;
         /** Lines of a name, a colon and a value. */
         public String headers = "";
+        /** The content of the answer, all of it. */
         public byte[] body = new byte[0];
         /** Why there's no answer, when the site or its Java failed. */
         public String failure;

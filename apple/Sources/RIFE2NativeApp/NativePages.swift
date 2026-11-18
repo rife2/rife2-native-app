@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Geert Bevin (gbevin[remove] at uwyn dot com)
+ * Licensed under the Apache License, Version 2.0 (the "License")
+ */
+
 import Foundation
 import SwiftUI
 import WebKit
@@ -23,6 +28,7 @@ open class NativePages: NSObject, ObservableObject, WKNavigationDelegate, WKUIDe
     @Published public private(set) var path = ""
     /// The web view, made the first time it's asked for.
     public private(set) lazy var view: WKWebView = made()
+    /// The site that answers the web view.
     public let site: NativeSite
     private let start: String
     private let saving = Saving()
@@ -316,8 +322,10 @@ private extension UIViewController {
 /// The pages as a SwiftUI view.
 @available(iOSApplicationExtension, unavailable)
 public struct NativePagesView: UIViewRepresentable {
+    /// The pages that this shows.
     public let pages: NativePages
 
+    /// A view of pages.
     public init(pages: NativePages) {
         self.pages = pages
     }
@@ -354,8 +362,10 @@ final class Saving: NSObject, WKDownloadDelegate {
 /// The pages as a SwiftUI view.
 @available(macOSApplicationExtension, unavailable)
 public struct NativePagesView: NSViewRepresentable {
+    /// The pages that this shows.
     public let pages: NativePages
 
+    /// A view of pages.
     public init(pages: NativePages) {
         self.pages = pages
     }

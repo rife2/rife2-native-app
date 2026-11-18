@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Geert Bevin (gbevin[remove] at uwyn dot com)
+ * Licensed under the Apache License, Version 2.0 (the "License")
+ */
+
 import Foundation
 import os
 import WebKit
@@ -21,6 +26,7 @@ public final class NativeSchemeHandler: NSObject, WKURLSchemeHandler {
         replies.withLock { $0 }
     }
 
+    /// A handler that serves a site.
     public init(site: NativeSite = .shared) {
         self.site = site
     }

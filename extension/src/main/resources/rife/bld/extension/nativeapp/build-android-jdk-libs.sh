@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright 2026 Geert Bevin (gbevin[remove] at uwyn dot com)
+# Licensed under the Apache License, Version 2.0 (the "License")
+
 # Prepares what native-image needs to build for Android and GraalVM doesn't ship, once for a
 # GraalVM and an NDK:
 #

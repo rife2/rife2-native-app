@@ -26,11 +26,25 @@ public class NativeJdkLibrariesOperation extends AbstractOperation<NativeJdkLibr
     private NativeAppProject project_;
     private Target target_;
 
+    /**
+     * The project whose site this is for.
+     *
+     * @param project the project
+     * @return this operation
+     * @since 1.11.0
+     */
     public NativeJdkLibrariesOperation fromProject(NativeAppProject project) {
         project_ = project;
         return this;
     }
 
+    /**
+     * The system that this is for.
+     *
+     * @param target the target
+     * @return this operation
+     * @since 1.11.0
+     */
     public NativeJdkLibrariesOperation target(Target target) {
         target_ = target;
         return this;

@@ -24,7 +24,7 @@ import java.util.UUID;
  * thread of the web view that asks. A web view of Android leaves two things
  * to the app that answers it: what a page posts, which it doesn't hand over,
  * and a redirect, which it can't be answered with. The script of
- * rife2-native-app hands over what a page posts first, see
+ * the pages hands over what a page posts first, see
  * {@link #posted(String, byte[])}.
  *
  * @author Geert Bevin (gbevin[remove] at uwyn dot com)
@@ -50,6 +50,11 @@ public class NativeRequests {
         }
     });
 
+    /**
+     * The requests of the pages that an app's context shows.
+     *
+     * @param context the context of the app
+     */
     public NativeRequests(Context context) {
         context_ = context.getApplicationContext();
     }

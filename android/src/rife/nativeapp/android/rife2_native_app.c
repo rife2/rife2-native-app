@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Geert Bevin (gbevin[remove] at uwyn dot com)
+ * Licensed under the Apache License, Version 2.0 (the "License")
+ */
+
 /* Between the Java of Android and the site, which is a native library with a
    Java of its own: starts that Java once, and has the site answer a request
    on the thread that asks. It's linked into the site's library. Texts cross
@@ -130,7 +135,7 @@ JNIEXPORT jstring JNICALL Java_rife_nativeapp_android_NativeSite_start(JNIEnv* e
     }
     if (rife2_abi(thread) != 1) {
         graal_detach_thread(thread);
-        return (*env)->NewStringUTF(env, "The native library has the functions of another version of rife2-native-app");
+        return (*env)->NewStringUTF(env, "The native library has the functions of another version of RIFE2");
     }
     jsize count = (*env)->GetArrayLength(env, properties);
     for (jsize i = 0; i + 1 < count && !(*env)->ExceptionCheck(env); i += 2) {

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 Geert Bevin (gbevin[remove] at uwyn dot com)
+# Licensed under the Apache License, Version 2.0 (the "License")
 """Writes the JvmFuncsFallbacks.c of GraalVM's libjvm for a set of static JDK libraries: a function
 that stops the program for every JVM_ function that those libraries call and JvmFuncs.c doesn't
 have. It does what JvmFuncsFallbacksBuildTask in GraalVM's mx_substratevm.py does when GraalVM

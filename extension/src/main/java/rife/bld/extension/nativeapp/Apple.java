@@ -18,6 +18,9 @@ import java.util.TreeSet;
 
 // what the frameworks for Apple's systems need
 final class Apple {
+    // what the JDK libraries for iOS and the Swift package are built for too
+    static final String MINIMUM_IOS = "17.0";
+
     private Apple() {
     }
 
