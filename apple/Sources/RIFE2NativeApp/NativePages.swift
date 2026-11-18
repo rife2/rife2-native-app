@@ -45,7 +45,8 @@ open class NativePages: NSObject, ObservableObject, WKNavigationDelegate, WKUIDe
     ///   - start: the path of the first page
     ///   - site: the site that answers the web view
     public init(start: String = "/", site: NativeSite = .shared) {
-        self.start = start
+        // without the slash, the path would be part of the host
+        self.start = start.hasPrefix("/") ? start : "/" + start
         self.site = site
         super.init()
     }
@@ -96,7 +97,7 @@ open class NativePages: NSObject, ObservableObject, WKNavigationDelegate, WKUIDe
 
     /// Whether an address is one of the site.
     public func own(_ url: URL) -> Bool {
-        url.scheme?.lowercased() == NativeSite.scheme.lowercased() && url.host?.lowercased() == NativeSite.host.lowercased()
+        url.scheme?.lowercased() == NativeSite.scheme.lowercased() && url.host?.lowercased() == NativeSite.host.lowercased() && url.port == nil
     }
 
     /// Shows the page at a path of the site.
@@ -123,7 +124,7 @@ open class NativePages: NSObject, ObservableObject, WKNavigationDelegate, WKUIDe
     /// handler; a page from elsewhere is ignored.
     open func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         let origin = message.frameInfo.securityOrigin
-        guard message.name == "rife2", origin.protocol.lowercased() == NativeSite.scheme.lowercased(), origin.host.lowercased() == NativeSite.host.lowercased(),
+        guard message.name == "rife2", origin.protocol.lowercased() == NativeSite.scheme.lowercased(), origin.host.lowercased() == NativeSite.host.lowercased(), origin.port == 0,
               let said = message.body as? [String: Any], let action = said["action"] as? String else {
             return
         }
@@ -301,7 +302,9 @@ final class Saving: NSObject, WKDownloadDelegate {
         // file of that name may still be on its way somewhere
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let file = folder.appendingPathComponent(suggestedFilename)
+        // only a name, so that the folder above it is the one made here, which goes once it's saved
+        let name = (suggestedFilename as NSString).lastPathComponent
+        let file = folder.appendingPathComponent(["", ".", ".."].contains(name) ? "download" : name)
         saved[ObjectIdentifier(download)] = file
         return file
     }

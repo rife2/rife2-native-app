@@ -187,7 +187,9 @@ The site's library for Android has the bridge of
 the app has the classes of `rife.nativeapp.android`. They aren't published
 as a library yet: an app copies `android/src` into its sources, or adds it
 to them in its Gradle build, here from a checkout of this repository beside
-the app's project. They're written for Java 17, and use `androidx.webkit`:
+the app's project. They're written for Java 17, and use `androidx.webkit`,
+whose message listener the system's web view of Android has to support,
+as an updated one does (`WebViewFeature.WEB_MESSAGE_LISTENER`):
 
 ```groovy
 android {
@@ -349,10 +351,24 @@ in RIFE2's wiki describes, since a native image has no java agent.
 | `androidApi(level)` | the oldest Android that the library runs on, 29 unless it's set |
 | `jdkLibraries(directory)` | where `native-jdk-libs` keeps what it builds; `RIFE2_NATIVE_JDK_LIBS`, or `~/.rife2/native-app/jdk-libs`, when it's not set |
 
-A build that extends another class than `WebProject` uses the operations
-of the commands itself, `NativeLibraryOperation`, `NativeCheckOperation` and
-`NativeJdkLibrariesOperation`, with `fromProject(this)` and
-`settings(new NativeAppSettings()...)`.
+A build that extends another subclass of `WebProject` than
+`NativeAppProject` uses the operations of the commands itself, in commands
+of its own that make the jar first:
+
+```java
+@BuildCommand(value = "native-library")
+public void nativeLibrary()
+throws Exception {
+    jar();
+    new NativeLibraryOperation().fromProject(this)
+        .settings(new NativeAppSettings().libraryName("mysite").addresses("/"))
+        .target(Target.MAC)
+        .execute();
+}
+```
+
+`NativeCheckOperation` and `NativeJdkLibrariesOperation` are used the same
+way.
 
 That adds three commands, which run on a Mac, for these targets:
 

@@ -125,7 +125,12 @@ final class SiteOnJvm {
     List<File> classpath(File staged) {
         var classpath = new LinkedHashSet<File>();
         classpath.add(staged);
-        classpath.add(project_.jarOperation().destinationFile());
+        try {
+            classpath.add(project_.jarOperation().destinationFile());
+        } catch (NullPointerException e) {
+            // bld sets up its jar operation when the jar is made
+            throw new IllegalStateException("The site's jar is made first, with jar() in the same command");
+        }
         classpath.addAll(project_.compileClasspathJars());
         classpath.addAll(project_.runtimeClasspathJars());
         classpath.addAll(project_.providedClasspathJars());

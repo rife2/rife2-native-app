@@ -88,7 +88,8 @@ public class NativePages {
     public NativePages(Activity activity, String start) {
         this.activity = activity;
         shown = new FrameLayout(activity);
-        at_ = NativeSite.root(activity) + start;
+        // without the slash, the path would be part of the host
+        at_ = NativeSite.root(activity) + (start.startsWith("/") ? start : "/" + start);
     }
 
     /**
@@ -110,8 +111,8 @@ public class NativePages {
     }
 
     /**
-     * Changes a web view before its first page, to add a JavaScript
-     * interface of the app for instance. It's called again for the web view
+     * Changes a web view before its first page, to add a message listener
+     * of the app for instance. It's called again for the web view
      * that takes the place of one whose pages Android stopped drawing.
      */
     protected void configure(WebView view) {
@@ -157,9 +158,11 @@ public class NativePages {
         // only the site's own frames get the object that reaches the app, not
         // one of elsewhere or a sandboxed one, and the app checks who asks
         if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
-            WebViewCompat.addWebMessageListener(view, "Rife2NativeApp", Set.of(NativeSite.root(activity)), this::asked);
+            // androidx takes a scheme of its own without a host
+            var http = NativeSite.scheme.equalsIgnoreCase("http") || NativeSite.scheme.equalsIgnoreCase("https");
+            WebViewCompat.addWebMessageListener(view, "Rife2NativeApp", Set.of(http ? NativeSite.root(activity) : NativeSite.scheme + "://"), this::asked);
         } else {
-            Log.w("rife2", "This web view can't tell the app what a page asks, so pages can't print, share, save or post");
+            Log.e("rife2", "This web view has no WebViewFeature.WEB_MESSAGE_LISTENER, so pages can't print, share, save, or post what they post");
         }
         view.setWebViewClient(new WebViewClient() {
             @Override
@@ -181,7 +184,8 @@ public class NativePages {
                 }
                 if (!KEPT_IN.contains(scheme)) {
                     try {
-                        activity.startActivity(new Intent(Intent.ACTION_VIEW, address));
+                        // only what's meant to be opened from a link, as a browser does
+                        activity.startActivity(new Intent(Intent.ACTION_VIEW, address).addCategory(Intent.CATEGORY_BROWSABLE));
                     } catch (RuntimeException e) {
                         Log.w("rife2", "Nothing on this device opens " + address, e);
                     }
@@ -309,10 +313,11 @@ public class NativePages {
         }
     }
 
-    // what a page asks of the app through the script of the pages, on a thread of the web view
     // what a page asks of the app through the script of the pages, on the thread of the screen
     private void asked(WebView view, WebMessageCompat message, Uri from, boolean mainFrame, JavaScriptReplyProxy reply) {
-        if (!NativeSite.own(activity, from) || null == message.getData()) {
+        // a scheme of the app's own has no host for androidx, which only lets the site's frames ask
+        var http = NativeSite.scheme.equalsIgnoreCase("http") || NativeSite.scheme.equalsIgnoreCase("https");
+        if (!(http ? NativeSite.own(activity, from) : NativeSite.scheme.equalsIgnoreCase(from.getScheme())) || null == message.getData()) {
             return;
         }
         try {
@@ -326,7 +331,13 @@ public class NativePages {
                     .putExtra(Intent.EXTRA_SUBJECT, said.optString("title")).putExtra(Intent.EXTRA_TEXT, said.optString("url")), null));
                 case "save" -> offer(said.optString("name"), said.optString("type"), Base64.decode(said.optString("data"), Base64.DEFAULT));
                 case "posted" -> {
-                    var named = requests_.posted(said.optString("type"), Base64.decode(said.optString("data"), Base64.DEFAULT));
+                    // a page waits for the answer, which says nothing when what it posts can't be read
+                    var named = "";
+                    try {
+                        named = requests_.posted(said.optString("type"), Base64.decode(said.optString("data"), Base64.DEFAULT));
+                    } catch (IllegalArgumentException e) {
+                        Log.w("rife2", "What a page posts couldn't be read, it goes without it");
+                    }
                     reply.postMessage(new JSONObject().put("id", said.optLong("id")).put("name", named).toString());
                 }
                 default -> {

@@ -142,6 +142,13 @@ class TestNativeApp {
     }
 
     @Test
+    void testTheJarIsMadeFirst(@TempDir Path temp) {
+        var site = new SiteOnJvm(new WebProject(), new NativeAppSettings(), null, Target.MAC);
+        var missing = assertThrows(IllegalStateException.class, () -> site.classpath(temp.toFile()));
+        assertTrue(missing.getMessage().contains("jar()"), missing.getMessage());
+    }
+
+    @Test
     void testTargets() {
         assertEquals(Target.IOS_SIMULATOR, Target.from("ios-sim"));
         assertEquals(Target.ANDROID, Target.from("android"));
