@@ -45,6 +45,7 @@ public class NativeJdkLibrariesOperation extends AbstractOperation<NativeJdkLibr
             throw new IllegalArgumentException("GraalVM has the JDK libraries for the Mac itself");
         }
 
+        Platform.requireMac();
         var graalvm = GraalVm.find();
         var settings = project_.nativeApp();
         var libraries = new File(settings.jdkLibraries(), graalvm.runtime());

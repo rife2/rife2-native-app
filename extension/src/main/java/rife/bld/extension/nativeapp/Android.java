@@ -83,6 +83,7 @@ final class Android {
         var docker = new File(out, "docker");
         docker.mkdirs();
         FileUtils.copy(Resources.extract("Dockerfile", out), new File(docker, "Dockerfile"));
+        System.out.println("Preparing the Linux container that builds for Android, which downloads GraalVM for Linux the first time");
         Commands.output(out, List.of("docker", "build", "-q", "-t", image, "--build-arg", "GRAALVM=" + graalvm_.community(),
             "--build-arg", "GRAALVM_SHA256=" + graalvm_.linuxChecksum(), docker.getAbsolutePath()));
         var configured = configuration.isDirectory() ? "-H:ConfigurationFileDirectories=/work/config " : "";

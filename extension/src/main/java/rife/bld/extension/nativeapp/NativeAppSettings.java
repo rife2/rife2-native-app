@@ -179,10 +179,10 @@ public class NativeAppSettings {
 
     public File jdkLibraries() {
         if (jdkLibraries_ != null) {
-            return jdkLibraries_;
+            return jdkLibraries_.getAbsoluteFile();
         }
         var set = System.getenv("RIFE2_NATIVE_JDK_LIBS");
-        return set != null && !set.isBlank() ? new File(set) : new File(System.getProperty("user.home"), ".rife2/native-app/jdk-libs");
+        return set != null && !set.isBlank() ? new File(set).getAbsoluteFile() : new File(System.getProperty("user.home"), ".rife2/native-app/jdk-libs");
     }
 
     /**

@@ -59,6 +59,7 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
         var configuration = new File(out, "config");
         site.walk(classpath, configuration, new File(out, "jvm-data"));
 
+        Platform.requireMac();
         var built = switch (target_) {
             case MAC -> mac(graalvm, site, classpath, configuration, out);
             case IOS, IOS_SIMULATOR -> ios(graalvm, site, classpath, configuration, out);
@@ -76,7 +77,7 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
     }
 
     private List<String> nativeImage(File tool, List<File> classpath, File configuration, File library) {
-        var command = new ArrayList<>(List.of(tool.getAbsolutePath(), "--no-fallback", "--shared"));
+        var command = new ArrayList<>(List.of(tool.getAbsolutePath(), "--no-fallback", "--shared", "-H:+UnlockExperimentalVMOptions"));
         if (configuration.isDirectory()) {
             command.add("-H:ConfigurationFileDirectories=" + configuration.getAbsolutePath());
         }
@@ -118,7 +119,7 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
 
         var name = site.libraryName();
         var command = nativeImage(new File(prepared, "bin/native-image"), classpath, configuration, new File(out, "lib" + name));
-        command.addAll(3, List.of("--target=ios-aarch64", "-H:+UnlockExperimentalVMOptions",
+        command.addAll(4, List.of("--target=ios-aarch64",
             "-H:NativeLinkerOption=-target", "-H:NativeLinkerOption=" + triple,
             "-H:NativeLinkerOption=-isysroot", "-H:NativeLinkerOption=" + sdk));
         Commands.run(project_.workDirectory(), command);
@@ -134,6 +135,7 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
             new File(framework, "Info.plist"));
         Apple.privacyManifest(settings, binary, new File(framework, "PrivacyInfo.xcprivacy"));
         Commands.run(out, List.of("codesign", "-f", "-s", "-", framework.getAbsolutePath()));
+        Apple.xcframework(project_, name);
         return framework;
     }
 

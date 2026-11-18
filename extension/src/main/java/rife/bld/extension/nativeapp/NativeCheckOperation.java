@@ -51,6 +51,7 @@ public class NativeCheckOperation extends AbstractOperation<NativeCheckOperation
             throw new IllegalArgumentException("A library for iOS devices is checked in the simulator: native-check ios-sim");
         }
 
+        Platform.requireMac();
         var graalvm = GraalVm.find();
         var site = new SiteOnJvm(project_, settings, graalvm);
         var out = NativeLibraryOperation.directory(project_, target_);
@@ -94,9 +95,6 @@ public class NativeCheckOperation extends AbstractOperation<NativeCheckOperation
         return arguments;
     }
 
-    private static List<String> lines(String output) {
-        return new ArrayList<>(Arrays.stream(output.replace("\r", "").split("\n")).filter(line -> !line.isBlank()).toList());
-    }
 
     private List<String> mac(SiteOnJvm site, File out, File check)
     throws Exception {
@@ -108,7 +106,7 @@ public class NativeCheckOperation extends AbstractOperation<NativeCheckOperation
         data.mkdirs();
         var command = new ArrayList<>(List.of(ask.getAbsolutePath()));
         command.addAll(arguments(site, data));
-        return lines(Commands.output(check, command));
+        return site.answers(Commands.output(check, command));
     }
 
     // a simulator runs a program of this Mac's disk, built for it, without an app around it
@@ -116,7 +114,20 @@ public class NativeCheckOperation extends AbstractOperation<NativeCheckOperation
     throws Exception {
         var settings = project_.nativeApp();
         var udid = simulator(settings.simulator(), check);
+        // one that this boots is shut down again, one that was booted stays
+        var booted = Commands.output(check, List.of("xcrun", "simctl", "list", "devices", "booted")).contains(udid);
         Commands.output(check, List.of("xcrun", "simctl", "bootstatus", udid, "-b"));
+        try {
+            return simulator(site, out, check, udid, settings);
+        } finally {
+            if (!booted) {
+                Commands.output(check, List.of("xcrun", "simctl", "shutdown", udid));
+            }
+        }
+    }
+
+    private List<String> simulator(SiteOnJvm site, File out, File check, String udid, NativeAppSettings settings)
+    throws Exception {
         var sdk = Commands.output(check, List.of("xcrun", "--sdk", "iphonesimulator", "--show-sdk-path")).trim();
         var ask = new File(check, "ask");
         Commands.run(check, List.of("xcrun", "--sdk", "iphonesimulator", "clang", "-O2", "-target", "arm64-apple-ios" + settings.minimumIos() + "-simulator",
@@ -127,7 +138,7 @@ public class NativeCheckOperation extends AbstractOperation<NativeCheckOperation
         data.mkdirs();
         var command = new ArrayList<>(List.of("xcrun", "simctl", "spawn", udid, ask.getAbsolutePath()));
         command.addAll(arguments(site, data));
-        return lines(Commands.output(check, command));
+        return site.answers(Commands.output(check, command));
     }
 
     private static String simulator(String name, File directory)
@@ -161,9 +172,14 @@ public class NativeCheckOperation extends AbstractOperation<NativeCheckOperation
             for (var argument : arguments(site, new File(there + "/data"))) {
                 arguments.append(" '").append(argument.replace("'", "'\\''")).append('\'');
             }
-            return lines(Commands.output(check, Map.of(), List.of(adb, "shell", "cd " + there + " && chmod 755 ask && LD_LIBRARY_PATH=. ./ask" + arguments)));
+            return site.answers(Commands.output(check, Map.of(), List.of(adb, "shell", "cd " + there + " && chmod 755 ask && LD_LIBRARY_PATH=. ./ask" + arguments)));
         } finally {
-            Commands.output(check, List.of(adb, "shell", "rm -rf " + there));
+            // a failure to tidy up doesn't take the place of what happened
+            try {
+                Commands.output(check, List.of(adb, "shell", "rm -rf " + there));
+            } catch (Exception e) {
+                System.err.println("The check's files stay in " + there + ": " + e.getMessage());
+            }
         }
     }
 }

@@ -29,7 +29,12 @@ final class SiteOnJvm {
     }
 
     String libraryName() {
-        return settings_.libraryName() != null ? settings_.libraryName() : project_.name();
+        var name = settings_.libraryName() != null ? settings_.libraryName() : project_.name();
+        // it's part of file names, commands and property lists
+        if (!name.matches("[A-Za-z0-9_][A-Za-z0-9_.-]*")) {
+            throw new IllegalArgumentException("The library name '" + name + "' can only have letters, digits, '_', '.' and '-': nativeApp().libraryName(...)");
+        }
+        return name;
     }
 
     String bundleIdentifier() {
@@ -70,6 +75,10 @@ final class SiteOnJvm {
             others.addAll(project_.testClasspathJars());
             others.stream().filter(SiteOnJvm::isServletApi).findFirst().ifPresent(classpath::add);
         }
+        if (classpath.stream().noneMatch(SiteOnJvm::isServletApi)) {
+            throw new IllegalStateException("The build has no jakarta.servlet-api jar, whose types RIFE2's interfaces name: " +
+                                            "add dependency(\"jakarta.servlet\", \"jakarta.servlet-api\", version(6, 0, 0)) to a scope");
+        }
         classpath.removeIf(file -> file.getName().endsWith("-sources.jar") || file.getName().endsWith("-javadoc.jar"));
         return new ArrayList<>(classpath);
     }
@@ -104,7 +113,8 @@ final class SiteOnJvm {
         }
         if (!settings_.addresses().isEmpty()) {
             var answers = ask(classpath, data, agent);
-            var failed = answers.stream().filter(answer -> answer.contains(" -") || answer.contains(" failed")).toList();
+            // an error page is an answer too, but not one to check against
+            var failed = answers.stream().filter(answer -> answer.contains(" -") || answer.contains(" failed") || answer.matches(".* 5\\d\\d \\d+ \\d+$")).toList();
             if (!failed.isEmpty()) {
                 throw new IOException("The site didn't answer on the JVM:\n" + String.join("\n", failed));
             }
@@ -140,9 +150,23 @@ final class SiteOnJvm {
 
     // what the site is told: the build's properties, with a directory of its own for what it keeps
     java.util.Map<String, String> properties(File data) {
-        var properties = new java.util.LinkedHashMap<String, String>();
+        var properties = new java.util.LinkedHashMap<String, String>(settings_.properties());
+        // each side keeps what it keeps apart
         properties.put("rife.nativeapp.data", data.getAbsolutePath());
-        properties.putAll(settings_.properties());
         return properties;
+    }
+
+    // the lines of a program's output that answer the addresses, not what the site printed
+    List<String> answers(String output) {
+        var answers = new ArrayList<String>();
+        for (var line : output.replace("\r", "").split("\n")) {
+            for (var address : settings_.addresses()) {
+                if (line.startsWith(address + " ")) {
+                    answers.add(line);
+                    break;
+                }
+            }
+        }
+        return answers;
     }
 }

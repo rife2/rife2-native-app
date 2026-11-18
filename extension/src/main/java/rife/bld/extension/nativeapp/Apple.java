@@ -36,7 +36,7 @@ final class Apple {
         plist.append("    <key>CFBundleName</key><string>").append(name).append("</string>\n");
         plist.append("    <key>CFBundlePackageType</key><string>FMWK</string>\n");
         // a version of numbers, which is what a bundle takes
-        var numbers = version.replaceAll("[^0-9.].*$", "");
+        var numbers = version.replaceAll("[^0-9.].*$", "").replaceAll("\\.+$", "");
         plist.append("    <key>CFBundleShortVersionString</key><string>").append(numbers.isEmpty() ? "1.0" : numbers).append("</string>\n");
         plist.append("    <key>CFBundleVersion</key><string>1</string>\n");
         if (platform != null) {
@@ -47,6 +47,29 @@ final class Apple {
         }
         plist.append("</dict>\n</plist>\n");
         return plist.toString();
+    }
+
+    // Xcode links one framework for the simulator and devices, made of the
+    // frameworks that were built for each, the one that's there when only
+    // one was
+    static void xcframework(rife.bld.extension.NativeAppProject project, String name)
+    throws IOException, InterruptedException {
+        var xcframework = new File(project.buildDirectory(), "native/" + name + ".xcframework");
+        delete(xcframework);
+        var command = new java.util.ArrayList<>(List.of("xcodebuild", "-create-xcframework"));
+        for (var target : List.of(Target.IOS, Target.IOS_SIMULATOR)) {
+            var framework = new File(NativeLibraryOperation.directory(project, target), name + ".framework");
+            if (framework.isDirectory()) {
+                command.addAll(List.of("-framework", framework.getAbsolutePath()));
+            }
+        }
+        command.addAll(List.of("-output", xcframework.getAbsolutePath()));
+        Commands.output(xcframework.getParentFile(), command);
+    }
+
+    private static void delete(File directory)
+    throws IOException {
+        Commands.delete(directory);
     }
 
     // Apple's required reason APIs: the symbols that a binary imports for
@@ -123,7 +146,8 @@ final class Apple {
         var runtime = graalvm.runtime();
         var built = new File(jdkLibraries, runtime + "/" + platform);
         var prepared = new File(out.getParentFile(), "graalvm-" + platform);
-        var libraries = new File(built, "static").isDirectory() ? "built " + new File(built, "static").lastModified() : "stand-ins";
+        // what native-jdk-libs left complete, it moves them in place at its end
+        var libraries = new File(built, "clibraries/libjvm.a").isFile() ? "built " + new File(built, "static").lastModified() : "stand-ins";
         var stamp = new File(prepared, "ios-libraries");
         var release = new File(prepared, "release");
         if (!stamp.isFile() || !FileUtils.readString(stamp).equals(libraries) ||
