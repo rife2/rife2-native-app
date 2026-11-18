@@ -123,6 +123,10 @@ subclassing it, for instance to add its own message handlers in
 
 An app extension, like a widget, links the package too and asks
 `NativeSite` for what it needs; the web view parts aren't available there.
+The site of an extension isn't told the platform, so its pages get no
+script, nor a directory for what lasts, so it keeps no cookies. watchOS has
+neither a web view nor a target of native-image: a watch app gets what it
+shows from the iPhone app, which asks its site.
 
 `NativeSite.scheme`, `NativeSite.host` and `NativeSite.properties` are set
 before the first page, when the app wants another address than `app://site`
@@ -192,9 +196,9 @@ it has widgets, since a widget can ask the site first. The site is at
 page stores for an address of the web. That address is where the pages
 keep what they store, so an app that changes it starts without what its
 pages kept before. `NativeSite.get(context, path)`
-answers what's at a path all at once; a response that doesn't end, like an
-event stream, is cancelled when the request returns, since Android takes an
-answer all at once.
+answers what's at a path all at once. A response that doesn't end, like an
+event stream, is cancelled when its request returns, since Android takes an
+answer all at once: an `EventSource` in a page gets nothing on Android.
 
 A subclass of `NativePages` adds a JavaScript interface of its own in
 `configure(WebView)`. Nothing but the site loads in the web view, since a
@@ -241,20 +245,20 @@ public class MyBuild extends NativeAppProject {
 }
 ```
 
-That adds three commands, each of which takes `mac`, `ios`, `ios-sim` or
-`android`:
+That adds three commands, which run on a Mac, for these targets:
 
 | Command | What it does |
 |---|---|
-| `./bld native-library <target>` | builds `build/native/<target>/`: a framework for Apple's systems, with a privacy manifest that declares what its code uses, or a shared library for Android with the bridge linked in |
-| `./bld native-check <target>` | asks the native library for the addresses of `nativeApp().addresses()`, on this Mac, in a simulator or on what adb sees, and compares its answers with the JVM's |
-| `./bld native-jdk-libs <target>` | builds the JDK libraries that iOS and Android need and GraalVM doesn't ship, once for every app on this machine |
+| `./bld native-library mac\|ios\|ios-sim\|android` | builds `build/native/<target>/`: a framework for Apple's systems, with a privacy manifest that declares what its code uses, or a shared library for Android with the bridge linked in. For iOS it also makes `build/native/<name>.xcframework` of the frameworks for devices and for the simulator that were built, which Xcode links |
+| `./bld native-check mac\|ios-sim\|android` | asks the native library for the addresses of `nativeApp().addresses()`, on this Mac, in a simulator (which it boots and shuts down again when it wasn't running) or on what adb sees, and compares its answers with the JVM's |
+| `./bld native-jdk-libs ios\|ios-sim\|android` | builds the JDK libraries that iOS and Android need and GraalVM doesn't ship, once for every app on this Mac; `android` uses the sources that a run for iOS fetched |
 
 Before every native build, the site is asked for those addresses on the
 JVM, and goes through the `main` of `nativeApp().walk(...)` when there is
 one, with GraalVM's tracing agent, which records what the library needs
-that native-image can't see by itself. An address whose answer changes
-each time, like a page with a CSRF token, can't be checked.
+that native-image can't see by itself. An address that the site answers
+with an error stops the build. An address whose answer changes each time,
+like a page with a CSRF token, can't be checked.
 
 It builds with GraalVM Community Edition 25.5 as sdkman installs it
 (`sdk install java 25.5.5.0+3-graalce`), or the GraalVM of `GRAALVM_HOME`.
@@ -273,10 +277,11 @@ to answer what native-image asks about Android's C types.
 On the JVM, before a native build:
 
 ```console
-java -cp "<the site's classpath>" rife.nativeapp.NativeApp /some/page /another
+java -cp "<the site's classpath>" rife.nativeapp.NativeApp -Dmy.setting=value /some/page /another
 ```
 
-prints the status, size and CRC-32 of each answer. `checks/ask.c`, linked
+prints the status, size and CRC-32 of each answer; a `-Dname=value` sets a
+property of the site first. `checks/ask.c`, linked
 with the native library, prints the status, size and CRC-32 of the same
 addresses, as `address status size crc`, which the two can be compared by;
 `./bld native-check` does that.
