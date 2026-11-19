@@ -1,0 +1,32 @@
+<section class="card order">
+  <p class="number"><!--v number/--> <span class="status status-{{v status/}}"><!--v status_label/--></span></p>
+  <h1><!--v customer/--></h1>
+  <p class="address"><!--v address/--></p>
+  <!--v phone_line/-->
+  <!--b phone_block--><p class="phone"><a href="tel:{{v phone_dial/}}"><!--v phone/--></a></p><!--/b-->
+  <dl class="facts">
+    <dt>When</dt><dd><!--v scheduled/-->, <!--v arrival/--></dd>
+    <dt>Equipment</dt><dd><!--v equipment/--></dd>
+    <dt>Technician</dt><dd><!--v technician/--></dd>
+  </dl>
+  <h2>Problem</h2>
+  <p class="problem"><!--v problem/--></p>
+</section>
+<!--v report/-->
+<!--b report_block-->
+<section class="card report">
+  <h2>Report</h2>
+  <p class="signed">Finished <!--v finished_at/--> after <!--v minutes/--> minutes, signed by <!--v signed_by/-->.</p>
+  <p class="notes"><!--v notes/--></p>
+  <h3>Checklist</h3>
+  <ul class="results"><!--v results/--></ul>
+  <h3>Parts used</h3>
+  <ul class="results"><!--v used_parts/--></ul>
+  <!--v signature_line/-->
+  <!--v report_photos/-->
+</section>
+<!--/b-->
+<!--i common/results/-->
+<!--b signature_block--><h3>Signature</h3><img class="signature" src="{{v signature_url/}}" alt="Signature of {{v signed_by/}}"><!--/b-->
+<!--b report_photos_block--><h3>Photos</h3><div class="photos"><!--v report_thumbs/--></div><!--/b-->
+<!--b thumb--><a href="{{v photo_url/}}"><img src="{{v photo_url/}}" alt="Photo {{v photo_number/}}" loading="lazy"></a><!--/b-->

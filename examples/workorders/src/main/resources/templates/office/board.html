@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>Dispatch</title>
+<!--i common/head/-->
+</head>
+<body class="office">
+<header class="bar">
+  <h1>Dispatch</h1>
+  <a class="button" href="{{v route:create/}}">New order</a>
+</header>
+<main>
+  <!--v days/-->
+  <!--b day-->
+  <h2><!--v day_label/--></h2>
+  <table class="orders">
+    <thead><tr><th>Order</th><th>When</th><th>Customer</th><th>Equipment</th><th>Technician</th><th>Status</th></tr></thead>
+    <tbody><!--v day_rows/--></tbody>
+  </table>
+  <!--/b-->
+  <!--b row-->
+  <tr>
+    <td><a href="{{v row_url/}}"><!--v row_number/--></a></td>
+    <td><!--v row_arrival/--></td>
+    <td><!--v row_customer/--><br><small><!--v row_address/--></small></td>
+    <td><!--v row_equipment/--></td>
+    <td><!--v row_technician/--></td>
+    <td><span class="status status-{{v row_status/}}"><!--v row_status_label/--></span></td>
+  </tr>
+  <!--/b-->
+  <!--b no_orders--><p class="empty">No orders yet.</p><!--/b-->
+</main>
+</body>
+</html>

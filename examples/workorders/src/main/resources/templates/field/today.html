@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>Today</title>
+<!--i common/head/-->
+</head>
+<body>
+<header class="bar">
+  <h1>Work orders</h1>
+  <p><!--v technician/-->, <!--v today/--></p>
+</header>
+<main>
+  <!--v notice/-->
+  <!--b synced--><p class="notice ok" role="status">Sent <!--v sent/--> finished, received <!--v received/--> new.<!--v refused_line/--></p><!--/b-->
+  <!--b refused_block--> The office didn't accept <!--v refused/-->, they're still waiting here.<!--/b-->
+  <!--b sync_failed--><p class="notice error" role="alert">The office couldn't be reached. Everything stays on this device, sync again when you have a connection.</p><!--/b-->
+
+  <section class="sync">
+    <p><!--v waiting/--></p>
+    <!--b waiting_none-->Nothing waiting to be sent.<!--/b-->
+    <!--b waiting_some--><strong><!--v waiting_count/--></strong> finished, waiting to be sent.<!--/b-->
+    <form action="{{v route:action:sync/}}" method="post">
+      <!--v route:inputs:sync/-->
+      <button class="secondary" data-busy="Syncing...">Sync with the office</button>
+    </form>
+  </section>
+
+  <!--v lists/-->
+  <!--b lists_block-->
+  <h2>Today</h2>
+  <ul class="jobs"><!--v today_jobs/--></ul>
+  <h2>Later</h2>
+  <ul class="jobs"><!--v later_jobs/--></ul>
+  <h2>Done</h2>
+  <ul class="jobs"><!--v done_jobs/--></ul>
+  <!--/b-->
+  <!--b no_orders--><p class="empty">There are no orders on this device yet. Sync with the office to get the ones for you.</p><!--/b-->
+  <!--b job-->
+  <li>
+    <a class="job" href="{{v job_url/}}">
+      <span class="when"><!--v job_when/--></span>
+      <span class="customer"><!--v job_customer/--></span>
+      <span class="address"><!--v job_address/--></span>
+      <span class="meta"><!--v job_equipment/--> &middot; <!--v job_number/--></span>
+      <span class="status status-{{v job_status/}}"><!--v job_status_label/--></span>
+    </a>
+  </li>
+  <!--/b-->
+  <!--b no_jobs--><li class="empty">Nothing here.</li><!--/b-->
+</main>
+</body>
+</html>

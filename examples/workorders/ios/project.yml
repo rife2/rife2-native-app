@@ -1,0 +1,43 @@
+# The app, which XcodeGen turns into an Xcode project, see ios/build.sh and ios/build-device.sh.
+# They put the framework of the site for the simulator or for devices in build/app.
+name: WorkOrders
+options:
+  bundleIdPrefix: com.uwyn.rife2
+  deploymentTarget:
+    iOS: "17.0"
+packages:
+  RIFE2NativeApp:
+    path: ../../..
+settings:
+  base:
+    DEVELOPMENT_TEAM: AGZT8GVS7G
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+    GENERATE_INFOPLIST_FILE: YES
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: 1
+targets:
+  WorkOrders:
+    type: application
+    platform: iOS
+    sources:
+      - path: app/WorkOrdersApp.swift
+      - path: app/PrivacyInfo.xcprivacy
+      - path: app/Settings.bundle
+    dependencies:
+      - framework: build/app/workorders.framework
+        embed: true
+      - package: RIFE2NativeApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.uwyn.rife2.workorders
+        TARGETED_DEVICE_FAMILY: "1,2"
+        INFOPLIST_KEY_CFBundleDisplayName: Work Orders
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        INFOPLIST_KEY_NSCameraUsageDescription: Photos of the work go into the report of the order.
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: The app syncs with the office's server when it's on your local network.
+        INFOPLIST_KEY_UIStatusBarStyle: UIStatusBarStyleLightContent
+        INFOPLIST_KEY_UIViewControllerBasedStatusBarAppearance: NO
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"

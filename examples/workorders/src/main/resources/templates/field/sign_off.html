@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>Sign off <!--v number/--></title>
+<!--i common/head/-->
+</head>
+<body>
+<header class="bar">
+  <a class="back" href="{{v order_url/}}"><!--v number/--></a>
+</header>
+<main>
+  <!--v notice/-->
+  <!--b expired--><p class="notice error" role="alert">That sign-off had expired, so it started over.</p><!--/b-->
+  <!--v step/-->
+  <!--b review-->
+  <p class="step">Step 1 of 3</p>
+  <h1>Check the work</h1>
+  <section class="card">
+    <h2>Checklist</h2>
+    <ul class="results"><!--v results/--></ul>
+    <h2>Parts used</h2>
+    <ul class="results"><!--v used_parts/--></ul>
+    <p><!--v photo_count/-->.</p>
+  </section>
+  <form action="{{v route:action:signOff/}}" method="post">
+    <!--v route:inputs:signOff/-->
+    <input type="hidden" name="order" value="{{v order_id/}}">
+    <!--v skipped/-->
+    <button name="next" value="1">Next</button>
+  </form>
+  <!--/b-->
+  <!--b skipped_block-->
+  <p class="error" role="alert"><!--v open_items/--></p>
+  <label class="check"><input type="checkbox" name="skip" value="true" {{v skip_checked/}}> They weren't needed for this job</label>
+  <!--v skip_error/-->
+  <!--b skip_error_block--><p class="error" role="alert">Confirm this or go back and finish the checklist.</p><!--/b-->
+  <!--/b-->
+
+  <!--b report-->
+  <p class="step">Step 2 of 3</p>
+  <h1>Write the report</h1>
+  <!--v errors:*/-->
+  <!--b errors:*--><ul class="errors" role="alert"><!--v errors/--></ul><!--/b-->
+  <!--b errormessage:*--><li><!--v errormessage/--></li><!--/b-->
+  <!--b mandatory:notes-->Describe what you did.<!--/b-->
+  <!--b mandatory:minutes-->Say how long the work took.<!--/b-->
+  <!--b invalid:minutes-->The time is in minutes, between 5 and 720.<!--/b-->
+  <!--b wrongLength:notes-->The report is too long.<!--/b-->
+  <form action="{{v route:action:signOff/}}" method="post">
+    <!--v route:inputs:signOff/-->
+    <input type="hidden" name="order" value="{{v order_id/}}">
+    <label>What was done <!--v form:textarea:notes/--></label>
+    <label>Time spent, in minutes <!--v form:input:minutes/--></label>
+    <div class="buttons">
+      <button name="back" value="1" class="secondary" formnovalidate>Back</button>
+      <button name="next" value="1">Next</button>
+    </div>
+  </form>
+  <!--/b-->
+
+  <!--b signature-->
+  <p class="step">Step 3 of 3</p>
+  <h1>Customer signature</h1>
+  <!--v signature_error/-->
+  <!--b signature_error_block--><p class="error" role="alert">The customer's name and signature are both needed.</p><!--/b-->
+  <form action="{{v route:action:signOff/}}" method="post" id="sign">
+    <!--v route:inputs:signOff/-->
+    <input type="hidden" name="order" value="{{v order_id/}}">
+    <label>Name <input name="signedBy" value="{{v signed_by/}}" maxlength="80" autocomplete="off" autocorrect="off" autocapitalize="words"></label>
+    <canvas id="pad" width="600" height="240" aria-label="Signature pad"></canvas>
+    <input type="hidden" name="signature" id="signature">
+    <div class="buttons">
+      <button type="button" class="secondary" id="clear">Clear</button>
+      <button name="back" value="1" class="secondary" formnovalidate>Back</button>
+      <button name="finish" value="1">Finish</button>
+    </div>
+  </form>
+  <script src="{{v webapp:rootUrl/}}js/signature.js"></script>
+  <!--/b-->
+  <!--i common/results/-->
+</main>
+</body>
+</html>

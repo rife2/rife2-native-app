@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>PreferenceSpecifiers</key>
+    <array>
+        <dict>
+            <key>Type</key><string>PSGroupSpecifier</string>
+            <key>Title</key><string>Office</string>
+            <key>FooterText</key><string>Without an address, the app syncs with a demo office inside it. The changes apply the next time the app starts.</string>
+        </dict>
+        <dict>
+            <key>Type</key><string>PSTextFieldSpecifier</string>
+            <key>Title</key><string>Address</string>
+            <key>Key</key><string>workorders.office</string>
+            <key>KeyboardType</key><string>URL</string>
+            <key>AutocapitalizationType</key><string>None</string>
+            <key>AutocorrectionType</key><string>No</string>
+        </dict>
+        <dict>
+            <key>Type</key><string>PSTextFieldSpecifier</string>
+            <key>Title</key><string>Token</string>
+            <key>Key</key><string>workorders.syncToken</string>
+            <key>IsSecure</key><true/>
+            <key>AutocapitalizationType</key><string>None</string>
+            <key>AutocorrectionType</key><string>No</string>
+        </dict>
+        <dict>
+            <key>Type</key><string>PSTextFieldSpecifier</string>
+            <key>Title</key><string>Technician</string>
+            <key>Key</key><string>workorders.technician</string>
+            <key>AutocapitalizationType</key><string>Words</string>
+            <key>AutocorrectionType</key><string>No</string>
+        </dict>
+    </array>
+</dict>
+</plist>

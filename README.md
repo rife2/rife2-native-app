@@ -32,6 +32,7 @@ Android devices and emulators of `arm64-v8a`.
 | `extension/` | the bld extension `bld-native-app`, which builds the site into a native library and checks it |
 | `checks/ask.c` | asks a native library for addresses without an app, to compare its answers with the JVM's |
 | `checks/android/` | an app made of the Android classes only, which shows a native library and taps through it |
+| `examples/workorders/` | a field service app whose technician's site runs in the office's browser and offline inside an iPhone app |
 
 ## The site
 

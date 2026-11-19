@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>New order</title>
+<!--i common/head/-->
+</head>
+<body class="office">
+<header class="bar">
+  <a class="back" href="{{v route:board/}}">Dispatch</a>
+</header>
+<main>
+  <h1>New order</h1>
+  <!--v errors:*/-->
+  <form class="card" action="{{v route:action:create/}}" method="post">
+    <!--v route:inputs:create/-->
+    <label>Customer <!--v form:input:customer/--></label>
+    <label>Address <!--v form:input:address/--></label>
+    <label>Phone <!--v form:input:phone/--></label>
+    <label>Equipment <!--v form:select:equipment/--></label>
+    <label>Problem <!--v form:textarea:problem/--></label>
+    <label>Technician
+      <select name="technician">
+        <option value="">Pick a technician</option>
+        <!--v technician_options/-->
+        <!--b technician_option--><option value="{{v technician_name/}}" {{v technician_selected/}}><!--v technician_name/--></option><!--/b-->
+      </select>
+    </label>
+    <label>Date <input type="date" name="scheduledFor" value="{{v scheduled_for/}}"></label>
+    <label>Arrival <!--v form:select:arrival/--></label>
+    <button>Schedule</button>
+  </form>
+  <!--b errors:*--><ul class="errors" role="alert"><!--v errors/--></ul><!--/b-->
+  <!--b errormessage:*--><li><!--v errormessage/--></li><!--/b-->
+  <!--b mandatory:customer-->Who is the customer?<!--/b-->
+  <!--b mandatory:address-->Where does the technician go?<!--/b-->
+  <!--b mandatory:problem-->Describe the problem.<!--/b-->
+  <!--b mandatory:technician-->Who does the job?<!--/b-->
+  <!--b invalid:technician-->Pick one of the technicians.<!--/b-->
+  <!--b mandatory:scheduledFor-->Pick a date.<!--/b-->
+  <!--b invalid:scheduledFor-->That isn't a date.<!--/b-->
+  <!--b mandatory:equipment-->Pick the equipment.<!--/b-->
+  <!--b invalid:equipment-->Pick the equipment.<!--/b-->
+  <!--b wrongLength:*-->That is too long.<!--/b-->
+  <!--b mandatory:arrival-->Pick an arrival time.<!--/b-->
+  <!--b invalid:arrival-->Pick an arrival time.<!--/b-->
+</main>
+</body>
+</html>

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title><!--v number/--></title>
+<!--i common/head/-->
+</head>
+<body {{v context:htmxHeaders/}}>
+<header class="bar">
+  <a class="back" href="{{v route:today/}}">Today</a>
+</header>
+<main>
+  <p class="notice error" id="problem" role="alert" hidden></p>
+  <!--i common/order/-->
+  <!--v actions/-->
+  <!--b start_block-->
+  <form class="actions" action="{{v start_url/}}" method="post">
+    <!--v route:inputs:start/-->
+    <button>Start the work</button>
+  </form>
+  <!--/b-->
+  <!--b sign_off_block-->
+  <p class="actions"><a class="button" href="{{v sign_off_url/}}">Sign off</a></p>
+  <!--/b-->
+  <!--v work/-->
+  <!--b work_block-->
+  <!--v checklist/-->
+  <!--v parts/-->
+  <!--v photos/-->
+  <!--/b-->
+  <!--i field/work/-->
+</main>
+</body>
+</html>

@@ -1,0 +1,41 @@
+<!--b checklist_block-->
+<section class="card" id="checklist">
+  <h2>Checklist</h2>
+  <ul class="checklist"><!--v check_items/--></ul>
+</section>
+<!--/b-->
+<!--b check_item-->
+<li id="check-{{v item_id/}}">
+  <label><input type="checkbox" name="done" value="true" hx-patch="{{v item_url/}}" hx-target="#check-{{v item_id/}}" hx-swap="outerHTML" {{v item_checked/}}> <!--v item_label/--></label>
+</li>
+<!--/b-->
+<!--b parts_block-->
+<section class="card" id="parts">
+  <h2>Parts used</h2>
+  <ul class="parts"><!--v part_items/--></ul>
+  <form class="add-part" hx-post="{{v parts_url/}}" hx-target="#parts" hx-swap="outerHTML">
+    <input name="part" placeholder="Part" aria-label="Part" required maxlength="80" autocorrect="off" autocapitalize="sentences">
+    <input name="quantity" type="number" value="1" min="1" max="99" aria-label="Quantity">
+    <button>Add</button>
+  </form>
+  <!--v part_error/-->
+</section>
+<!--/b-->
+<!--b part_item-->
+<li><span><!--v part_quantity/--> &times; <!--v part_name/--></span> <button class="link" hx-delete="{{v part_url/}}" hx-target="#parts" hx-swap="outerHTML">Remove</button></li>
+<!--/b-->
+<!--b no_parts--><li class="empty">No parts used yet.</li><!--/b-->
+<!--b part_error_block--><p class="error" role="alert">A part needs a name and a quantity between 1 and 99.</p><!--/b-->
+<!--b photos_block-->
+<section class="card" id="photos">
+  <h2>Photos</h2>
+  <div class="photos"><!--v photo_items/--></div>
+  <form hx-post="{{v photos_url/}}" hx-encoding="multipart/form-data" hx-target="#photos" hx-swap="outerHTML" hx-trigger="change">
+    <label class="button secondary">Take a photo<input type="file" name="photo" accept="image/jpeg,image/png,image/heic,image/heif,image/webp" class="visually-hidden"></label>
+  </form>
+  <!--v photo_error/-->
+</section>
+<!--/b-->
+<!--b photo_item--><a href="{{v photo_url/}}"><img src="{{v photo_url/}}" alt="Photo {{v photo_number/}}" loading="lazy"></a><!--/b-->
+<!--b no_photos--><p class="empty">No photos yet.</p><!--/b-->
+<!--b photo_error_block--><p class="error" role="alert">That wasn't an image, or it was too large.</p><!--/b-->
