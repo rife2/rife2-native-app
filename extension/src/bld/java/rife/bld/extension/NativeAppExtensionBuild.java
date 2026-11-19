@@ -38,7 +38,7 @@ public class NativeAppExtensionBuild extends Project {
                 .groupId("com.uwyn.rife2")
                 .artifactId("bld-native-app")
                 .name("bld Native App")
-                .description("bld extension that builds a RIFE2 site into a native library for an iOS, macOS or Android app")
+                .description("bld extension that builds a RIFE2 site into a native library for an iOS, macOS, visionOS or Android app")
                 .url("https://github.com/rife2/rife2-native-app")
                 .developer(new PublishDeveloper()
                     .id("gbevin")

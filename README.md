@@ -27,7 +27,7 @@ Android devices and emulators of `arm64-v8a`.
 
 | Part | What it does |
 |---|---|
-| `Package.swift` and `apple/` | the Swift package `RIFE2NativeApp`, which starts the site's Java in an iOS or macOS app and shows its pages in a web view |
+| `Package.swift` and `apple/` | the Swift package `RIFE2NativeApp`, which starts the site's Java in an iOS, macOS or visionOS app and shows its pages in a web view |
 | `android/` | the classes that show the site in an Android app, and the bridge that's linked into the site's library |
 | `extension/` | the bld extension `bld-native-app`, which builds the site into a native library and checks it |
 | `checks/ask.c` | asks a native library for addresses without an app, to compare its answers with the JVM's |

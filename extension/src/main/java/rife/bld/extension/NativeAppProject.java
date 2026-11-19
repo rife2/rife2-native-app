@@ -9,7 +9,7 @@ import rife.bld.WebProject;
 import rife.bld.extension.nativeapp.*;
 
 /**
- * A web project whose site also runs inside an iOS, macOS or Android app,
+ * A web project whose site also runs inside an iOS, macOS, visionOS or Android app,
  * with RIFE2's {@code rife.nativeapp}. It adds the commands that build the
  * site into a native library, check that library against the JVM, and
  * build the JDK libraries that iOS and Android need; {@link #nativeApp()}
