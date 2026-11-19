@@ -167,7 +167,7 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
         var binary = new File(version, name);
         Files.move(new File(out, "lib" + name + ".dylib").toPath(), binary.toPath());
         Commands.run(out, List.of("install_name_tool", "-id", "@rpath/" + name + ".framework/Versions/A/" + name, binary.getAbsolutePath()));
-        FileUtils.writeString(Apple.infoPlist(site, project_.version().toString(), null, null), new File(version, "Resources/Info.plist"));
+        FileUtils.writeString(Apple.infoPlist(site, version(), settings_.frameworkBuild(), null, null), new File(version, "Resources/Info.plist"));
         Apple.privacyManifest(settings_, binary, new File(version, "Resources/PrivacyInfo.xcprivacy"));
         Files.createSymbolicLink(new File(framework, "Versions/Current").toPath(), new File("A").toPath());
         Files.createSymbolicLink(new File(framework, name).toPath(), new File("Versions/Current/" + name).toPath());
@@ -197,12 +197,16 @@ public class NativeLibraryOperation extends AbstractOperation<NativeLibraryOpera
         var binary = new File(framework, name);
         Files.move(new File(out, "lib" + name + ".dylib").toPath(), binary.toPath());
         Commands.run(out, List.of("install_name_tool", "-id", "@rpath/" + name + ".framework/" + name, binary.getAbsolutePath()));
-        FileUtils.writeString(Apple.infoPlist(site, project_.version().toString(), target_.bundlePlatform(), target_.minimum()),
+        FileUtils.writeString(Apple.infoPlist(site, version(), settings_.frameworkBuild(), target_.bundlePlatform(), target_.minimum()),
             new File(framework, "Info.plist"));
         Apple.privacyManifest(settings, binary, new File(framework, "PrivacyInfo.xcprivacy"));
         Commands.run(out, List.of("codesign", "-f", "-s", "-", framework.getAbsolutePath()));
         Apple.xcframework(project_, settings_, name);
         return framework;
+    }
+
+    private String version() {
+        return settings_.frameworkVersion() != null ? settings_.frameworkVersion() : project_.version().toString();
     }
 
     // GraalVM puts the desktop libraries of the JDK beside what it builds, which the site doesn't use

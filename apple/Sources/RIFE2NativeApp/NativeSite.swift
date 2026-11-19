@@ -56,42 +56,86 @@ public struct NativeSiteError: Error, CustomStringConvertible {
     /// What went wrong.
     public let description: String
 
-    init(_ description: String) {
+    /// Why the site can't answer.
+    public init(_ description: String) {
         self.description = description
     }
+}
+
+/// The texts that the pages can show of their own, in English unless an app
+/// sets them, translated for instance, before the first page is shown.
+public enum NativeTexts {
+    /// The title of the page that says why a page couldn't be shown.
+    nonisolated(unsafe) public static var pageFailed = "This page couldn't be shown"
 }
 
 /// The site of the app, compiled from Java to native code by GraalVM, which
 /// answers requests without a server. The app links the native library that
 /// the site was built into.
 ///
-/// Set ``scheme``, ``host`` and ``properties`` before ``shared`` is first used.
+/// Set ``scheme``, ``host``, ``properties`` and ``arguments`` before
+/// ``shared`` is first used: setting one after that is a mistake, which
+/// stops a debug build and is logged as a fault in another.
 public final class NativeSite: @unchecked Sendable {
     /// The scheme of the address that the web view has the site at.
-    nonisolated(unsafe) public static var scheme = "app"
+    nonisolated(unsafe) public static var scheme = "app" {
+        didSet { tooLate("scheme") }
+    }
     /// The host of the address that the web view has the site at.
-    nonisolated(unsafe) public static var host = "site"
+    nonisolated(unsafe) public static var host = "site" {
+        didSet { tooLate("host") }
+    }
     /// What the site is told before its first request, beside what's told
     /// for every app: the platform, the directory for what should last, the
     /// address and the version of the app.
-    nonisolated(unsafe) public static var properties: [String: String] = [:]
+    nonisolated(unsafe) public static var properties: [String: String] = [:] {
+        didSet { tooLate("properties") }
+    }
     /// The arguments that the site's Java starts with, like `-Xmx64m`. An app
     /// extension, like a widget, gets a small heap unless this says otherwise:
     /// iOS stops an extension that uses more than a few tens of megabytes.
-    nonisolated(unsafe) public static var arguments: [String]? = nil
+    nonisolated(unsafe) public static var arguments: [String]? = nil {
+        didSet { tooLate("arguments") }
+    }
+    nonisolated(unsafe) private static var begun = false
+
+    private static func tooLate(_ what: String) {
+        if begun {
+            log.fault("NativeSite.\(what, privacy: .public) was set after the site started, which the site and its pages don't see")
+            assertionFailure("NativeSite.\(what) was set after NativeSite.shared was first used")
+        }
+    }
 
     /// The site, started the first time it's used.
     public static let shared = NativeSite()
 
     /// The address of the site, like `app://site`.
     public let root: String
+    /// The scheme of the address of the site, as it was when the site started.
+    public let scheme: String
+    /// The host of the address of the site, as it was when the site started.
+    public let host: String
     private let java: Result<OpaquePointer, NativeSiteError>
     private let numbers = OSAllocatedUnfairLock(initialState: Int64(0))
 
-    // an app extension runs apart from its app, inside the app's bundle
-    static let isExtension = Bundle.main.bundleURL.pathExtension == "appex"
+    /// Whether this runs in an app extension, like a widget, which runs apart
+    /// from its app, inside the app's bundle.
+    public static let isExtension = Bundle.main.bundleURL.pathExtension == "appex"
+
+    /// Whether an address is one of the site of ``scheme`` and ``host``, before it started.
+    public static func own(_ url: URL) -> Bool {
+        url.scheme?.lowercased() == scheme.lowercased() && url.host?.lowercased() == host.lowercased() && url.port == nil
+    }
+
+    /// Whether an address is one of this site.
+    public func own(_ url: URL) -> Bool {
+        url.scheme?.lowercased() == scheme.lowercased() && url.host?.lowercased() == host.lowercased() && url.port == nil
+    }
 
     private init() {
+        Self.begun = true
+        scheme = Self.scheme
+        host = Self.host
         root = "\(Self.scheme)://\(Self.host)"
         do {
             java = .success(try Self.started())

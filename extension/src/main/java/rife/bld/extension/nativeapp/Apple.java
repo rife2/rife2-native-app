@@ -21,7 +21,7 @@ final class Apple {
     private Apple() {
     }
 
-    static String infoPlist(SiteOnJvm site, String version, String platform, String minimum) {
+    static String infoPlist(SiteOnJvm site, String version, String build, String platform, String minimum) {
         var name = site.libraryName();
         var plist = new StringBuilder("""
             <?xml version="1.0" encoding="UTF-8"?>
@@ -38,7 +38,11 @@ final class Apple {
         // a version of numbers, which is what a bundle takes
         var numbers = version.replaceAll("[^0-9.].*$", "").replaceAll("\\.+$", "");
         plist.append("    <key>CFBundleShortVersionString</key><string>").append(numbers.isEmpty() ? "1.0" : numbers).append("</string>\n");
-        plist.append("    <key>CFBundleVersion</key><string>1</string>\n");
+        // what a bundle takes as its build number
+        if (build != null && !build.matches("[0-9]+(\\.[0-9]+){0,2}")) {
+            throw new IllegalArgumentException("A build number is one to three numbers with dots between them, not '" + build + "': nativeApp().frameworkVersion(...)");
+        }
+        plist.append("    <key>CFBundleVersion</key><string>").append(null == build ? "1" : build).append("</string>\n");
         if (platform != null) {
             plist.append("    <key>CFBundleSupportedPlatforms</key><array><string>").append(platform).append("</string></array>\n");
         }
@@ -72,29 +76,6 @@ final class Apple {
         Commands.delete(directory);
     }
 
-    // Apple's required reason APIs: the symbols that a binary imports for
-    // each, and the reason that a site inside an app has for it
-    private static final Map<String, Set<String>> SYMBOLS = new LinkedHashMap<>();
-    private static final Map<String, String> REASONS = Map.of(
-        // the files of the app itself
-        "FileTimestamp", "C617.1",
-        // time measured inside the app
-        "SystemBootTime", "35F9.1",
-        // whether there's room to write a file
-        "DiskSpace", "E174.1",
-        // what the app itself keeps
-        "UserDefaults", "CA92.1");
-
-    static {
-        SYMBOLS.put("FileTimestamp", Set.of("_stat", "_fstat", "_lstat", "_fstatat", "_getattrlist", "_fgetattrlist", "_getattrlistat",
-            "_getattrlistbulk", "_NSFileCreationDate", "_NSFileModificationDate", "_NSURLContentModificationDateKey", "_NSURLCreationDateKey"));
-        SYMBOLS.put("SystemBootTime", Set.of("_mach_absolute_time"));
-        SYMBOLS.put("DiskSpace", Set.of("_statfs", "_statvfs", "_fstatfs", "_fstatvfs", "_getattrlist", "_fgetattrlist", "_getattrlistat",
-            "_NSFileSystemFreeSize", "_NSFileSystemSize", "_NSURLVolumeAvailableCapacityKey", "_NSURLVolumeAvailableCapacityForImportantUsageKey",
-            "_NSURLVolumeAvailableCapacityForOpportunisticUsageKey", "_NSURLVolumeTotalCapacityKey"));
-        SYMBOLS.put("UserDefaults", Set.of("_OBJC_CLASS_$_NSUserDefaults"));
-    }
-
     // The privacy manifest of the framework, the build's own or one that
     // declares what the binary uses, so that App Store Connect never turns a
     // build away for one that's left out and none is claimed that isn't used.
@@ -104,7 +85,7 @@ final class Apple {
             FileUtils.copy(settings.privacyManifest(), manifest);
             return;
         }
-        var imported = new TreeSet<>(Arrays.asList(Commands.output(binary.getParentFile(), List.of("nm", "-u", binary.getAbsolutePath())).split("\\s+")));
+        var used = PrivacyApis.used(PrivacyApis.imported(binary), PrivacyApis.strings(binary));
         var plist = new StringBuilder("""
             <?xml version="1.0" encoding="UTF-8"?>
             <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -113,13 +94,15 @@ final class Apple {
                 <key>NSPrivacyAccessedAPITypes</key>
                 <array>
             """);
-        for (var category : SYMBOLS.entrySet()) {
-            if (category.getValue().stream().anyMatch(imported::contains)) {
-                plist.append("        <dict>\n");
-                plist.append("            <key>NSPrivacyAccessedAPIType</key><string>NSPrivacyAccessedAPICategory").append(category.getKey()).append("</string>\n");
-                plist.append("            <key>NSPrivacyAccessedAPITypeReasons</key><array><string>").append(REASONS.get(category.getKey())).append("</string></array>\n");
-                plist.append("        </dict>\n");
+        for (var api : used) {
+            if (null == api.reason) {
+                throw new IOException("The library uses what Apple asks a reason for that a site doesn't have, " + api.category +
+                                      ": give it a manifest of its own with nativeApp().privacyManifest(...)");
             }
+            plist.append("        <dict>\n");
+            plist.append("            <key>NSPrivacyAccessedAPIType</key><string>").append(PrivacyApis.PREFIX).append(api.category).append("</string>\n");
+            plist.append("            <key>NSPrivacyAccessedAPITypeReasons</key><array><string>").append(api.reason).append("</string></array>\n");
+            plist.append("        </dict>\n");
         }
         plist.append("""
                 </array>

@@ -4,16 +4,17 @@
 
 # Shows a site's native library for Android in an app made of the classes of rife2-native-app, on
 # the emulator or the device that adb sees, and goes through it: each step either waits until the
-# screen shows a text, or taps what shows a text.
+# screen shows a text, taps what shows a text, types a text where the last tap put the cursor,
+# scrolls down a screen, waits until the check app logged a text, or checks that it didn't.
 #
-#   checks/android/check.sh path/to/libsite.so [see:text|tap:text]...
+#   checks/android/check.sh path/to/libsite.so [see:text|tap:text|type:text|scroll:down|log:text|nolog:text]...
 #
 # Needs the Android SDK of ANDROID_HOME, or of Android Studio on a Mac, with build-tools 35 and
 # platform 35, and a JDK. It downloads androidx.webkit the first time.
 set -euo pipefail
 
 if [ $# -lt 1 ]; then
-    echo "Usage: $0 path/to/libsite.so [see:text|tap:text]..." >&2
+    echo "Usage: $0 path/to/libsite.so [see:text|tap:text|type:text|scroll:down|log:text|nolog:text]..." >&2
     exit 2
 fi
 library=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
@@ -60,6 +61,7 @@ keytool -genkeypair -keystore "$out/check.jks" -storepass check1 -keypass check1
 "$adb" uninstall rife.nativeapp.check > /dev/null 2>&1 || true
 "$adb" install "$out/check.apk" > /dev/null
 trap '"$adb" uninstall rife.nativeapp.check > /dev/null 2>&1 || true' EXIT
+"$adb" logcat -c
 # a notice can cover the top of the screen right after an emulator started
 "$adb" shell cmd statusbar collapse > /dev/null 2>&1 || true
 "$adb" shell am start -W -n rife.nativeapp.check/.MainActivity > /dev/null
@@ -91,9 +93,48 @@ if found:
 for step in "$@"; do
     what=${step%%:*}
     text=${step#*:}
-    if [ "$what" != see ] && [ "$what" != tap ] || [ "$text" = "$step" ]; then
-        echo "A step is see:text or tap:text, not $step" >&2
+    if [ "$what" != see ] && [ "$what" != tap ] && [ "$what" != type ] && [ "$what" != log ] && [ "$what" != nolog ] && [ "$step" != scroll:down ] || [ "$text" = "$step" ]; then
+        echo "A step is see:text, tap:text, type:text, scroll:down, log:text or nolog:text, not $step" >&2
         exit 2
+    fi
+    if [ "$what" = nolog ]; then
+        logged=$("$adb" logcat -d -s rife2-check:I 2> /dev/null || true)
+        if [[ $logged == *"$text"* ]]; then
+            echo "The app logged \"$text\":" >&2
+            echo "$logged" >&2
+            exit 1
+        fi
+        echo "$step"
+        continue
+    fi
+    if [ "$what" = log ]; then
+        # read whole, since grep stops at what it looks for and adb would be cut off
+        logged=""
+        for _ in $(seq 1 30); do
+            logged=$("$adb" logcat -d -s rife2-check:I 2> /dev/null || true)
+            case $logged in *"$text"*) break ;; esac
+            sleep 1
+        done
+        if [[ $logged != *"$text"* ]]; then
+            echo "The app didn't log \"$text\", it logged:" >&2
+            "$adb" logcat -d -s rife2-check:I >&2 || true
+            exit 1
+        fi
+        echo "$step"
+        continue
+    fi
+    if [ "$what" = scroll ]; then
+        # from below the middle of the screen to above it, slowly enough not to fling
+        size=$("$adb" shell wm size | sed -E 's/.* ([0-9]+)x([0-9]+).*/\1 \2/' | tail -1)
+        "$adb" shell input swipe $(( ${size% *} / 2 )) $(( ${size#* } * 3 / 4 )) $(( ${size% *} / 2 )) $(( ${size#* } / 4 )) 600
+        echo "$step"
+        continue
+    fi
+    if [ "$what" = type ]; then
+        # input takes a space as %s, and the shell of the device reads the rest
+        "$adb" shell input text "'$(printf '%s' "$text" | sed "s/ /%s/g; s/'/'\\\\''/g")'"
+        echo "$step"
+        continue
     fi
     at=""
     for _ in $(seq 1 30); do
@@ -108,6 +149,8 @@ for step in "$@"; do
     fi
     if [ "$what" = tap ]; then
         "$adb" shell input tap $at
+        # a web view that's asked for what it shows while a page loads can keep a part of it
+        sleep 2
     fi
     echo "$step"
 done

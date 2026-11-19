@@ -8,8 +8,12 @@ import SwiftUI
 import WebKit
 #if os(iOS) || os(visionOS)
 import UIKit
+/// A color of the platform.
+public typealias NativeColor = UIColor
 #else
 import AppKit
+/// A color of the platform.
+public typealias NativeColor = NSColor
 #endif
 
 /// The pages of the site in a web view, with what they need of the app that a
@@ -18,138 +22,460 @@ import AppKit
 /// print, and a page that the system stopped drawing is loaded again.
 ///
 /// The pages know that they're in an app through the `context:nativeAppScript`
-/// value of their templates. An app adds what's its own by subclassing this,
-/// for instance its own message handlers in ``configure(_:)``. A subclass
-/// that overrides a delegate method calls `super`'s, which is where links
-/// leave the site, pages print and a stopped page loads again. An app
-/// extension, like a widget, uses ``NativeSite`` without this.
+/// value of their templates. A page and the app tell each other what's their
+/// own through it: the app ``listen(_:_:)``s for what a page tells it with
+/// `rife2NativeApp.tell(name, data)`, and ``tell(_:_:)``s a page what it
+/// hears with `rife2NativeApp.on(name, heard)`. An app adds more of its own
+/// by subclassing this. A subclass that overrides a delegate method calls
+/// `super`'s, which is where links leave the site, pages print, a stopped page
+/// loads again and what waits for a page to load runs. An app extension, like
+/// a widget, uses ``NativeSite`` without this.
 @available(iOSApplicationExtension, unavailable)
 @available(visionOSApplicationExtension, unavailable)
 @available(macOSApplicationExtension, unavailable)
 open class NativePages: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
+    /// What a page and its app tell each other about, which a page reads as
+    /// `rife2NativeApp.protocol`: 1 has ``listen(_:_:)`` and ``tell(_:_:)``.
+    public static let `protocol` = 1
+
     /// The path of the page that's shown.
     @Published public private(set) var path = ""
     /// Whether there's a page to go back to.
     @Published public private(set) var canGoBack = false
+    /// Whether there's a page to go forward to.
+    @Published public private(set) var canGoForward = false
     /// The web view, made the first time it's asked for.
     public private(set) lazy var view: WKWebView = made()
     /// The site that answers the web view.
     public let site: NativeSite
-    private let start: String
+    private var first: URL?
+    private let background: NativeColor?
+    private let inspectable: Bool
+    private let zooms: Bool
+    private var built = false
+    // what listen adds to, once what the pages are told at their start is there
+    private var content: WKUserContentController?
+    private var handler: NativeSchemeHandler?
+    // pages of the history that the app answered with itself, at the address that it answered, for when the
+    // web view shows one again from its cache; a page that sends the web view on is replaced in the history
+    // by where it sends it, under the same item
+    private let owned = NSMapTable<WKBackForwardListItem, NSString>.weakToStrongObjects()
+    // the page of one line that sends the web view on finished, and where it sends it didn't start yet
+    private var forwarding = false
+    // how many pages in a row sent the web view on, which a browser stops after a while
+    private var forwards = 0
     private let saving = Saving()
-    private var watched: NSKeyValueObservation?
-    private var backed: NSKeyValueObservation?
+    private var watched: [NSKeyValueObservation] = []
+    private var listened: [String: (Any) -> Void] = [:]
+    // what runs once the page that's loading is there
+    private var waiting: [() -> Void] = []
+    private var inFront: NSObjectProtocol?
     private var reloaded: Date?
     // a reload that's owed, for when the app is in front again or after a while
-    private var activated: NSObjectProtocol?
+    private var owed: NSObjectProtocol?
     private var retry: DispatchWorkItem?
     private var waited: TimeInterval = 10
 
     /// - Parameters:
     ///   - start: the path of the first page
     ///   - site: the site that answers the web view
-    public init(start: String = "/", site: NativeSite = .shared) {
-        // without the slash, the path would be part of the host
-        self.start = start.hasPrefix("/") ? start : "/" + start
+    ///   - background: the color behind the pages, which shows before the
+    ///     first one is drawn and when one is pulled past its edge; the web
+    ///     view's own when it's not given
+    ///   - inspectable: whether Safari's Web Inspector can look into the pages
+    ///   - zooms: whether a page can be enlarged with two fingers, which a
+    ///     screen of an app usually can't; on a Mac, a page always can, as in
+    ///     a browser
+    public init(start: String = "/", site: NativeSite = .shared, background: NativeColor? = nil, inspectable: Bool = false, zooms: Bool = false) {
         self.site = site
+        self.background = background
+        self.inspectable = inspectable
+        self.zooms = zooms
         super.init()
+        // without the slash, the path would be part of the host
+        first = URL(string: site.root + (start.hasPrefix("/") ? start : "/" + start))
+        #if os(iOS) || os(visionOS)
+        let active = UIApplication.didBecomeActiveNotification
+        #else
+        let active = NSApplication.didBecomeActiveNotification
+        #endif
+        inFront = NotificationCenter.default.addObserver(forName: active, object: nil, queue: .main) { [weak self] _ in
+            self?.activated()
+        }
     }
 
-    /// Changes the configuration of the web view before it's made, to add the
-    /// message handlers of the app for instance.
+    /// Changes the configuration of the web view before it's made, to
+    /// ``listen(_:_:)`` for what the pages tell the app for instance.
     open func configure(_ configuration: WKWebViewConfiguration) {
     }
 
     /// Changes the web view once it's made, before its first page loads.
+    /// This is called while ``view`` is being made, so an override uses the
+    /// view that it's given: reading ``view`` here would make it again,
+    /// without end.
     open func prepare(_ view: WKWebView) {
+    }
+
+    /// Called each time the app is in front, when it starts too, and when
+    /// it's back from the background or from another app.
+    open func activated() {
     }
 
     private func made() -> WKWebView {
         let configuration = WKWebViewConfiguration()
-        configuration.setURLSchemeHandler(NativeSchemeHandler(site: site), forURLScheme: NativeSite.scheme)
+        let handler = NativeSchemeHandler(site: site)
+        self.handler = handler
+        configuration.setURLSchemeHandler(handler, forURLScheme: site.scheme)
         // the controller holds its handlers strongly, and the view holds the controller
         configuration.userContentController.add(Handler(self), name: "rife2")
         configure(configuration)
+        // what the pages know of the app before their own scripts run
+        configuration.userContentController.addUserScript(WKUserScript(source: Self.told(Array(listened.keys), zooms: zooms),
+                                                                       injectionTime: .atDocumentStart, forMainFrameOnly: false))
+        content = configuration.userContentController
 
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.navigationDelegate = self
         view.uiDelegate = self
         view.allowsBackForwardNavigationGestures = true
+        view.isInspectable = inspectable
+        if let background {
+            view.underPageBackgroundColor = background
+            #if os(iOS) || os(visionOS)
+            view.isOpaque = false
+            view.backgroundColor = background
+            view.scrollView.backgroundColor = background
+            #endif
+        }
         #if os(macOS)
         // two fingers enlarge a page, as in a browser
         view.allowsMagnification = true
         #endif
         prepare(view)
-        watched = view.observe(\.url, options: [.initial, .new]) { [weak self] view, _ in
-            let path = view.url?.path ?? ""
-            DispatchQueue.main.async {
-                self?.path = path
-            }
-        }
-        backed = view.observe(\.canGoBack, options: [.initial, .new]) { [weak self] view, _ in
-            let back = view.canGoBack
-            DispatchQueue.main.async {
-                self?.canGoBack = back
-            }
-        }
+        watched = [
+            view.observe(\.url, options: [.initial, .new]) { [weak self] view, _ in
+                let path = view.url?.path ?? ""
+                DispatchQueue.main.async {
+                    self?.path = path
+                }
+            },
+            view.observe(\.canGoBack, options: [.initial, .new]) { [weak self] view, _ in
+                let back = view.canGoBack
+                DispatchQueue.main.async {
+                    self?.canGoBack = back
+                }
+            },
+            view.observe(\.canGoForward, options: [.initial, .new]) { [weak self] view, _ in
+                let forward = view.canGoForward
+                DispatchQueue.main.async {
+                    self?.canGoForward = forward
+                }
+            },
+        ]
+        built = true
         // on this view, the lazy one isn't there until this returns
-        if let url = URL(string: site.root + start) {
-            view.load(URLRequest(url: url))
+        if let first {
+            view.load(URLRequest(url: first))
         }
         return view
     }
 
+    // the script that tells a page what the app hears, written as a script writes its texts
+    static func told(_ heard: [String], zooms: Bool) -> String {
+        let native: [String: Any] = ["protocol": Self.protocol, "heard": heard.sorted(), "zooms": zooms]
+        let written = (try? JSONSerialization.data(withJSONObject: native)).map { String(decoding: $0, as: UTF8.self) } ?? "{}"
+        return "window.rife2NativeAppHost = \(written);"
+    }
+
     deinit {
-        if let activated {
-            NotificationCenter.default.removeObserver(activated)
+        for observer in [inFront, owed].compactMap({ $0 }) {
+            NotificationCenter.default.removeObserver(observer)
         }
     }
 
     /// Whether an address is one of the site.
     public func own(_ url: URL) -> Bool {
-        url.scheme?.lowercased() == NativeSite.scheme.lowercased() && url.host?.lowercased() == NativeSite.host.lowercased() && url.port == nil
+        site.own(url)
     }
 
-    /// Shows the page at a path of the site.
+    /// Shows the page at a path of the site. Before the web view is made,
+    /// that's the first page that it shows.
     public func go(_ path: String) {
         // without the slash, the path would be part of the host
-        guard let url = URL(string: site.root + (path.hasPrefix("/") ? path : "/" + path)) else {
-            return
+        if let url = URL(string: site.root + (path.hasPrefix("/") ? path : "/" + path)) {
+            open(url)
+        }
+    }
+
+    /// Shows the page at an address of the site, one that a widget or a
+    /// link to the app was tapped for for instance. Before the web view is
+    /// made, that's the first page that it shows.
+    ///
+    /// - Returns: whether the address is one of the site, the only ones that are shown
+    @discardableResult
+    public func open(_ url: URL) -> Bool {
+        guard own(url) else {
+            return false
+        }
+        // also the page that's loaded when what draws the pages stopped before there was one
+        first = url
+        guard built else {
+            return true
         }
         settle()
         view.load(URLRequest(url: url))
+        return true
+    }
+
+    /// Goes back a page, when there's one to go back to.
+    @discardableResult
+    public func back() -> Bool {
+        guard view.canGoBack else {
+            return false
+        }
+        settle()
+        view.goBack()
+        return true
+    }
+
+    /// Goes forward a page, when there's one to go forward to.
+    @discardableResult
+    public func forward() -> Bool {
+        guard view.canGoForward else {
+            return false
+        }
+        settle()
+        view.goForward()
+        return true
+    }
+
+    /// Loads the page that's shown again.
+    public func reload() {
+        settle()
+        // what draws the pages stopped before there was one, or the first one didn't load
+        if view.url == nil, let first {
+            view.load(URLRequest(url: first))
+        } else {
+            view.reload()
+        }
+    }
+
+    /// Runs something once the page that's loading is there, the one that a
+    /// redirect leads to, or now when none is. When the page doesn't load, or
+    /// says why it couldn't be shown, it doesn't run. A load that's stopped
+    /// before the web view started it, which tells nobody, leaves it waiting
+    /// for the next one.
+    public func whenLoaded(_ run: @escaping () -> Void) {
+        // a page that's on its way: through a redirect, or loaded again once what draws it can
+        if built && !view.isLoading && !forwarding && owed == nil && retry == nil {
+            run()
+        } else {
+            waiting.append(run)
+        }
     }
 
     // a page that loads by itself doesn't owe a reload anymore
     private func settle() {
-        if let activated {
-            NotificationCenter.default.removeObserver(activated)
-            self.activated = nil
+        if let owed {
+            NotificationCenter.default.removeObserver(owed)
+            self.owed = nil
         }
         retry?.cancel()
         retry = nil
+    }
+
+    /// Hears what the pages tell the app with `rife2NativeApp.tell(name, data)`,
+    /// which arrives as a script's value does: a `String`, an `NSNumber`, an
+    /// `NSDate`, an array, a dictionary or `NSNull`. Only a page of the site is heard. A
+    /// page knows what the app hears with `rife2NativeApp.hears(name)`, from
+    /// the next page on when this is called after ``configure(_:)``.
+    public func listen(_ name: String, _ heard: @escaping (Any) -> Void) {
+        let new = listened[name] == nil
+        listened[name] = heard
+        if let content, new {
+            let quoted = (try? JSONSerialization.data(withJSONObject: name, options: .fragmentsAllowed)).map { String(decoding: $0, as: UTF8.self) } ?? "\"\""
+            content.addUserScript(WKUserScript(source: "window.rife2NativeAppHost && window.rife2NativeAppHost.heard.push(\(quoted));",
+                                                                                injectionTime: .atDocumentStart, forMainFrameOnly: false))
+        }
+    }
+
+    /// Tells the page that's shown something, which it hears with
+    /// `rife2NativeApp.on(name, heard)`; nothing happens when it doesn't
+    /// listen. What's told is what a script can be given: a `String`, a
+    /// number, a `Bool`, a `Date`, an array, a dictionary or `NSNull`.
+    public func tell(_ name: String, _ data: Any = NSNull()) {
+        run("const app = window.rife2NativeApp; return app && app.told ? app.told(name, data) === true : false",
+            ["name": name, "data": data]) { _ in }
+    }
+
+    /// Calls a function of the page that's shown, `showChart` or
+    /// `charts.show` for instance, with arguments that a script can be
+    /// given: a `String`, a number, a `Bool`, a `Date`, an array, a
+    /// dictionary or `NSNull`. The function is found from `window` on, as a
+    /// `function` or a `var` of a page's script is, not a `const`, a `let`
+    /// or a `class`, which a script puts on `window` itself when it's called.
+    ///
+    /// - Parameters:
+    ///   - function: the name of the function, from `window` on
+    ///   - arguments: what the function is given
+    ///   - answered: told whether the page has the function, and what it
+    ///     returned when it's something that a script can return: after the
+    ///     promise that it returned was kept, for one that does, and nothing
+    ///     when it failed
+    public func call(_ function: String, _ arguments: Any..., then answered: ((_ called: Bool, _ result: Any?) -> Void)? = nil) {
+        let script = """
+            let owner = window, found = window;
+            for (const name of path.split('.')) {
+                owner = found;
+                found = found == null ? undefined : found[name];
+            }
+            if (typeof found !== 'function') return [false];
+            let result;
+            try {
+                result = await found.apply(owner, args);
+            } catch (e) {
+                return [true, null];
+            }
+            try {
+                return [true, JSON.parse(JSON.stringify(result === undefined ? null : result))];
+            } catch (e) {
+                return [true, null];
+            }
+            """
+        run(script, ["path": function, "args": arguments]) { result in
+            guard let answered else {
+                return
+            }
+            let said = result as? [Any]
+            let value = said?.count == 2 ? said?[1] : nil
+            answered(said?.first as? Bool ?? false, value is NSNull ? nil : value)
+        }
+    }
+
+    /// Presses what a selector finds on the page that's shown, a button for instance.
+    ///
+    /// - Parameters:
+    ///   - selector: the CSS selector of what's pressed, the first it finds
+    ///   - pressed: told whether the page has it
+    public func press(_ selector: String, then pressed: ((Bool) -> Void)? = nil) {
+        run("const found = document.querySelector(selector); if (!found) return false; found.click(); return true", ["selector": selector]) { result in
+            pressed?(result as? Bool ?? false)
+        }
+    }
+
+    // a script with what it's given as arguments, which the web view writes for it
+    private func run(_ script: String, _ arguments: [String: Any], _ answered: @escaping (Any?) -> Void) {
+        guard built else {
+            answered(nil)
+            return
+        }
+        view.callAsyncJavaScript(script, arguments: arguments, in: nil, in: .page) { result in
+            switch result {
+            case .success(let value):
+                answered(value)
+            case .failure(let error):
+                log.error("A script of the app failed on the page: \(error.localizedDescription, privacy: .public)")
+                answered(nil)
+            }
+        }
     }
 
     /// What a page of the site asks of the app through the "rife2" message
     /// handler; a page from elsewhere is ignored.
     open func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         let origin = message.frameInfo.securityOrigin
-        guard message.name == "rife2", origin.protocol.lowercased() == NativeSite.scheme.lowercased(), origin.host.lowercased() == NativeSite.host.lowercased(), origin.port == 0,
+        guard message.name == "rife2", origin.protocol.lowercased() == site.scheme.lowercased(), origin.host.lowercased() == site.host.lowercased(), origin.port == 0,
               let said = message.body as? [String: Any], let action = said["action"] as? String else {
             return
         }
-        if action == "print" {
+        switch action {
+        case "print":
             printPage()
+        case "tell":
+            if let name = said["name"] as? String, let heard = listened[name] {
+                heard(said["data"] ?? NSNull())
+            }
+        default:
+            log.error("A page asked for \(action, privacy: .public), which this version of rife2-native-app doesn't know")
         }
     }
 
+    open func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        // only what a page that sends the web view on started counts on
+        if !forwarding {
+            forwards = 0
+        }
+        forwarding = false
+        handler?.answered = nil
+    }
+
     open func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        loaded(webView)
     }
 
     open func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        failed(webView, error)
     }
 
     open func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        failed(webView, error)
+    }
+
+    // A page that sends the web view on isn't the one that loads, the one
+    // that it leads to is, and one that says why a page couldn't be shown
+    // is one that didn't load.
+    private func loaded(_ webView: WKWebView) {
+        guard !webView.isLoading else {
+            return
+        }
+        let own: NativeSchemeHandler.Own?
+        if let answered = handler?.answered, answered.url == webView.url {
+            handler?.answered = nil
+            own = answered.own
+            if let item = webView.backForwardList.currentItem {
+                if let own {
+                    owned.setObject("\(own == .forward ? "forward" : "failed") \(answered.url.absoluteString)" as NSString, forKey: item)
+                } else {
+                    owned.removeObject(forKey: item)
+                }
+            }
+        } else {
+            // from the cache, without asking for it again, when it's still the page that was answered
+            let kept = webView.backForwardList.currentItem.flatMap { owned.object(forKey: $0) as String? }?.split(separator: " ", maxSplits: 1)
+            own = kept?.count == 2 && String(kept![1]) == webView.url?.absoluteString ? (kept![0] == "forward" ? .forward : .failed) : nil
+        }
+        // what it sends the web view to starts after this, or leaves the site, see decidePolicyFor
+        if own == .forward {
+            forwarding = true
+            forwards += 1
+            return
+        }
+        forwards = 0
+        let run = waiting
+        waiting = []
+        if own != .failed {
+            for each in run {
+                each()
+            }
+        }
+    }
+
+    private func failed(_ webView: WKWebView, _ error: Error) {
+        ended(webView)
+    }
+
+    // What waits for a page that doesn't come is let go of. A load that
+    // another one took the place of is cancelled first, so that's only
+    // known once the delegate was told.
+    private func ended(_ webView: WKWebView) {
+        forwarding = false
+        forwards = 0
+        handler?.answered = nil
+        DispatchQueue.main.async { [weak self, weak webView] in
+            if let webView, !webView.isLoading {
+                self?.waiting = []
+            }
+        }
     }
 
     // The system stops what draws the pages when it needs the memory, which
@@ -168,7 +494,7 @@ open class NativePages: NSObject, ObservableObject, WKNavigationDelegate, WKUIDe
             return
         }
         log.error("What draws the pages stopped again right after it was started again")
-        guard activated == nil && retry == nil else {
+        guard owed == nil && retry == nil else {
             return
         }
         #if os(iOS) || os(visionOS)
@@ -178,7 +504,7 @@ open class NativePages: NSObject, ObservableObject, WKNavigationDelegate, WKUIDe
         let active = NSApplication.didBecomeActiveNotification
         let inFront = NSApplication.shared.isActive
         #endif
-        activated = NotificationCenter.default.addObserver(forName: active, object: nil, queue: .main) { [weak self, weak webView] _ in
+        owed = NotificationCenter.default.addObserver(forName: active, object: nil, queue: .main) { [weak self, weak webView] _ in
             guard let self, let webView else {
                 return
             }
@@ -202,7 +528,7 @@ open class NativePages: NSObject, ObservableObject, WKNavigationDelegate, WKUIDe
     // a process that stopped before the first page was there leaves nothing to reload
     private func loadAgain(_ webView: WKWebView) {
         settle()
-        if webView.url == nil, let url = URL(string: site.root + start) {
+        if webView.url == nil, let url = first {
             webView.load(URLRequest(url: url))
         } else {
             webView.reload()
@@ -212,6 +538,12 @@ open class NativePages: NSObject, ObservableObject, WKNavigationDelegate, WKUIDe
     open func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
         if action.shouldPerformDownload {
             return .download
+        }
+        // pages that keep sending the web view on, to themselves for instance
+        if action.targetFrame?.isMainFrame ?? false, forwards >= 20 {
+            log.error("The site sent the web view on 20 times in a row, the last time to \(action.request.url?.absoluteString ?? "", privacy: .public)")
+            ended(webView)
+            return .cancel
         }
         // A link out of the site, to a web page or a phone number for
         // instance, goes to the system: the app has no way back from it. What
@@ -223,6 +555,8 @@ open class NativePages: NSObject, ObservableObject, WKNavigationDelegate, WKUIDe
         if leaving.contains(scheme) {
             await leave(to: url)
         }
+        // a page that sent the web view out of the site ended there
+        ended(webView)
         return .cancel
     }
 
@@ -246,17 +580,21 @@ open class NativePages: NSObject, ObservableObject, WKNavigationDelegate, WKUIDe
     open func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction,
                       windowFeatures: WKWindowFeatures) -> WKWebView? {
         if let url = action.request.url, own(url) {
+            settle()
             webView.load(action.request)
         }
         return nil
     }
 
+    // a page that became a file to save doesn't load
     open func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
         download.delegate = saving
+        ended(webView)
     }
 
     open func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
         download.delegate = saving
+        ended(webView)
     }
 
     /// Opens an address outside of the site.

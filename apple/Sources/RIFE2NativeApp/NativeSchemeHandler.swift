@@ -93,6 +93,29 @@ public final class NativeSchemeHandler: NSObject, WKURLSchemeHandler {
         text.replacingOccurrences(of: "\r", with: " ").replacingOccurrences(of: "\n", with: " ")
     }
 
+    // A page that this answered with itself rather than with the site's:
+    // one that sends the web view on, or one that says why a page couldn't
+    // be shown. Only touched on the main thread, as the last page that was
+    // answered, which a web view doesn't tell its delegate.
+    enum Own {
+        case forward, failed
+    }
+    var answered: (url: URL, own: Own?)?
+
+    // as a browser reads an address: without tabs and line breaks, and without spaces and control characters around it
+    static func cleaned(_ location: String) -> String {
+        let around = CharacterSet(charactersIn: Unicode.Scalar(0)...Unicode.Scalar(0x20))
+        return location.replacingOccurrences(of: "[\\t\\r\\n]", with: "", options: .regularExpression).trimmingCharacters(in: around)
+    }
+
+    // whether an address is the one of a page apart from its fragment
+    static func sameDocument(_ location: String, _ page: URL) -> Bool {
+        func withoutFragment(_ address: String) -> String {
+            address.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? address
+        }
+        return location.contains("#") && withoutFragment(location) == withoutFragment(page.absoluteString)
+    }
+
     // a redirect is followed with a GET, which has no body that these would describe
     static func withoutBody(_ headers: String) -> String {
         headers.split(separator: "\n").filter { line in
@@ -133,8 +156,8 @@ public final class NativeSchemeHandler: NSObject, WKURLSchemeHandler {
             root = handler.site.root
             url = task.request.url!
             base = followed ?? url
-            // what a script of the page asks for at the page's own address isn't the page
-            page = task.request.mainDocumentURL == url && (task.request.value(forHTTPHeaderField: "Accept") ?? "").hasPrefix("text/html")
+            // what a script of the page asks for at the page's own address isn't the page, which asks for what a browser does
+            page = task.request.mainDocumentURL == url && (task.request.value(forHTTPHeaderField: "Accept") ?? "").hasPrefix("text/html,application/xhtml+xml")
             NativeSchemeHandler.replies.withLock { $0 += 1 }
         }
 
@@ -154,10 +177,15 @@ public final class NativeSchemeHandler: NSObject, WKURLSchemeHandler {
             HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers.merging(["Cache-Control": "no-store"]) { said, _ in said })!
         }
 
-        private func respond(_ status: Int, _ headers: [String: String]) {
+        private func respond(_ status: Int, _ headers: [String: String], own: Own? = nil, at shown: URL? = nil) {
             self.status = status
             let response = response(status, headers)
-            tell { $0.didReceive(response) }
+            tell { [self] in
+                if page {
+                    handler?.answered = (shown ?? url, own)
+                }
+                $0.didReceive(response)
+            }
         }
 
         func committed(status: Int, headers: [(name: String, value: String)]) {
@@ -167,18 +195,30 @@ public final class NativeSchemeHandler: NSObject, WKURLSchemeHandler {
             // links of the page would be wrong. Anything else, a file or what a
             // script asks for, is followed here.
             if (300...399).contains(status),
-               let said = headers.first(where: { $0.name.caseInsensitiveCompare("Location") == .orderedSame })?.value,
-               let location = URL(string: said, relativeTo: base)?.absoluteString {
+               let said = headers.first(where: { $0.name.caseInsensitiveCompare("Location") == .orderedSame })?.value {
+                // what's checked is what the page is sent to, without what a browser leaves out of an address
+                guard let location = URL(string: NativeSchemeHandler.cleaned(said), relativeTo: base)?.absoluteString else {
+                    respond(502, [:])
+                    return
+                }
                 let own = location.lowercased().hasPrefix(root.lowercased() + "/") || location.lowercased() == root.lowercased()
                 // a browser refuses to be sent to a script or to data, which would run as the site
                 guard own || ["http", "https"].contains(URL(string: location)?.scheme?.lowercased() ?? "") else {
                     respond(502, [:])
                     return
                 }
-                // a page sent elsewhere goes there through the web view, which leaves the app for it
+                // A page sent elsewhere goes there through the web view, which
+                // leaves the app for it. One sent to itself with a fragment
+                // takes that address and loads again, since going there would
+                // load nothing; a page that was posted to is asked for again,
+                // not posted to, as after any redirect.
                 if page, let quoted = try? JSONSerialization.data(withJSONObject: location, options: .fragmentsAllowed) {
-                    forward = Data("<!DOCTYPE html><script>location.replace(".utf8) + quoted + Data(")</script>".utf8)
-                    respond(200, ["Content-Type": "text/html; charset=UTF-8"])
+                    let itself = NativeSchemeHandler.sameDocument(location, url)
+                    forward = itself ?
+                        Data("<!DOCTYPE html><script>history.replaceState(null, '', ".utf8) + quoted + Data("); location.reload()</script>".utf8) :
+                        Data("<!DOCTYPE html><script>location.replace(".utf8) + quoted + Data(")</script>".utf8)
+                    // one that takes the address it sends the web view to has it once it's done
+                    respond(200, ["Content-Type": "text/html; charset=UTF-8"], own: .forward, at: itself ? URL(string: location) : nil)
                     return
                 }
                 if own && redirects < 5 {
@@ -221,6 +261,7 @@ public final class NativeSchemeHandler: NSObject, WKURLSchemeHandler {
                     task.didFinish()
                 // a page that isn't there would leave the screen empty, so it says why instead
                 case .failed(let why) where page && unanswered:
+                    handler?.answered = (url, .failed)
                     task.didReceive(response(200, ["Content-Type": "text/html; charset=UTF-8"]))
                     task.didReceive(Data(Self.explained(why).utf8))
                     task.didFinish()
@@ -240,10 +281,11 @@ public final class NativeSchemeHandler: NSObject, WKURLSchemeHandler {
             let device = "\(UIDevice.current.model), \(UIDevice.current.systemName) \(UIDevice.current.systemVersion)"
             #endif
             let said = why.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
+            let title = NativeTexts.pageFailed.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
             return """
                 <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head>
                 <body style="font: 17px -apple-system; padding: 24px; line-height: 1.5; overflow-wrap: anywhere">
-                <h1 style="font-size: 22px">This page couldn't be shown</h1>
+                <h1 style="font-size: 22px">\(title)</h1>
                 <p>\(said)</p>
                 <p style="color: gray">\(device)</p>
                 </body></html>

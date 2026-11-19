@@ -18,5 +18,5 @@ xcodebuild build -project ios/WorkOrders.xcodeproj -scheme WorkOrders -configura
     -derivedDataPath ios/build/device-app -allowProvisioningUpdates > ios/build/device-build.log 2>&1 ||
     { echo "The app didn't build, see ios/build/device-build.log" >&2; exit 1; }
 app=ios/build/device-app/Build/Products/Release-iphoneos/WorkOrders.app
-python3 ios/check_privacy.py "$app"
+./bld app-check-privacy "$app"
 echo "Built $app"

@@ -51,6 +51,14 @@ public class NativeRequests {
             return size() > 4;
         }
     });
+    // the pages that this answered with itself, by the address that the web view asked for: one that
+    // sends it on, or one that says why a page couldn't be shown; only the last few are of interest
+    private final Map<String, Boolean> answeredItself_ = Collections.synchronizedMap(new LinkedHashMap<>() {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, Boolean> eldest) {
+            return size() > 16;
+        }
+    });
     private final Map<String, Posted> posted_ = Collections.synchronizedMap(new LinkedHashMap<>() {
         @Override
         protected boolean removeEldestEntry(Map.Entry<String, Posted> eldest) {
@@ -84,13 +92,6 @@ public class NativeRequests {
             }
         }
         return null;
-    }
-
-    /**
-     * Called with what a page posted, before it goes to the site, for a
-     * check that looks at what a web view hands over.
-     */
-    protected void handed(String method, String address, String type, byte[] body) {
     }
 
     interface Saving {
@@ -173,9 +174,6 @@ public class NativeRequests {
             headers.put("Content-Type", posted.type());
         }
         var body = null == posted ? null : posted.body();
-        if (body != null) {
-            handed(request.getMethod(), address, header(headers, "Content-Type"), body);
-        }
         var lines = new StringBuilder();
         for (var header : headers.entrySet()) {
             lines.append(oneLine(header.getKey())).append(": ").append(oneLine(header.getValue())).append('\n');
@@ -207,7 +205,38 @@ public class NativeRequests {
             from = sentOn(from, answer);
             answer = NativeSite.ask(context_, from, "GET", followedLines.toString(), null);
         }
-        return response(answer, page, from);
+        var asked = url.toString();
+        var response = response(answer, page, from, asked);
+        if (page && answer.failure != null) {
+            answeredItself_.put(asked, false);
+        } else if (page && response.getStatusCode() == 200 && answer.status >= 300 && answer.status < 400) {
+            answeredItself_.put(asked, true);
+            // one that takes the address it sends the web view to may be said to finish at that one
+            var location = sentTo(asked, answer);
+            if (location != null && sameDocument(location, asked)) {
+                answeredItself_.put(location, true);
+            }
+        } else if (page) {
+            answeredItself_.remove(asked);
+        }
+        return response;
+    }
+
+    // whether the page at an address was one that this answered with itself, once: true for one that
+    // sends the web view on, false for one that says why a page couldn't be shown, or nothing
+    Boolean answeredItself(String address) {
+        return null == address ? null : answeredItself_.remove(address);
+    }
+
+    // where a page is sent, as an address of its own
+    private static String sentTo(String asked, NativeSite.Answer answer) {
+        var said = answer.header("Location");
+        return null == said ? null : resolved(asked, said.replaceAll("[\\t\\r\\n]", "").replaceAll("^[\\x00-\\x20]+|[\\x00-\\x20]+$", ""));
+    }
+
+    // whether an address is the one of a page apart from its fragment
+    static boolean sameDocument(String location, String page) {
+        return location.contains("#") && location.split("#", 2)[0].equals(page.split("#", 2)[0]);
     }
 
     // a line break, in what a page says it posts for instance, would tell the site another header
@@ -215,12 +244,13 @@ public class NativeRequests {
         return text.replaceAll("[\\r\\n]+", " ");
     }
 
-    private WebResourceResponse response(NativeSite.Answer answer, boolean page, String address) {
+    private WebResourceResponse response(NativeSite.Answer answer, boolean page, String address, String asked) {
         if (answer.failure != null) {
             Log.w("rife2", answer.failure);
             // a page that isn't there would leave the screen empty, so it says why instead
             var said = "<!DOCTYPE html><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-                + "<body style=\"font: 17px sans-serif; padding: 24px; line-height: 1.5; overflow-wrap: anywhere\"><h1 style=\"font-size: 22px\">This page couldn't be shown</h1><p>"
+                + "<body style=\"font: 17px sans-serif; padding: 24px; line-height: 1.5; overflow-wrap: anywhere\"><h1 style=\"font-size: 22px\">"
+                + NativeTexts.pageFailed.replace("&", "&amp;").replace("<", "&lt;") + "</h1><p>"
                 + answer.failure.replace("&", "&amp;").replace("<", "&lt;") + "</p>";
             // what a script asks for fails as such
             return new WebResourceResponse("text/html", "UTF-8", page ? 200 : 500, page ? "OK" : "Internal Server Error",
@@ -250,7 +280,12 @@ public class NativeRequests {
                 return new WebResourceResponse("text/plain", "UTF-8", 502, "Bad Gateway", Map.of("Cache-Control", "no-store"), new ByteArrayInputStream(new byte[0]));
             }
             // a < in the address would otherwise be read as markup by the page
-            body = ("<!DOCTYPE html><script>location.replace(" + JSONObject.quote(resolved).replace("<", "\\u003c") + ")</script>").getBytes(StandardCharsets.UTF_8);
+            // One sent to itself with a fragment takes that address and loads
+            // again, since going there would load nothing; a page that was
+            // posted to is asked for again, not posted to, as after any redirect.
+            var quoted = JSONObject.quote(resolved).replace("<", "\\u003c");
+            body = (sameDocument(resolved, asked) ? "<!DOCTYPE html><script>history.replaceState(null, '', " + quoted + "); location.reload()</script>"
+                : "<!DOCTYPE html><script>location.replace(" + quoted + ")</script>").getBytes(StandardCharsets.UTF_8);
             headers.clear();
             headers.put("Content-Type", "text/html; charset=UTF-8");
             status = 200;

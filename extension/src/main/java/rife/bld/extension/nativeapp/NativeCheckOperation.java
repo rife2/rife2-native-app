@@ -167,10 +167,11 @@ public class NativeCheckOperation extends AbstractOperation<NativeCheckOperation
     private List<String> simulator(SiteOnJvm site, File out, File check)
     throws Exception {
         var settings = settings_;
-        var udid = simulator(target_ == Target.VISION_SIMULATOR ? settings.visionSimulator() : settings.simulator(), check);
+        var simulator = Simulators.find(target_, target_ == Target.VISION_SIMULATOR ? settings.visionSimulator() : settings.simulator(), check);
+        var udid = simulator.udid();
         // one that this boots is shut down again, one that was booted stays
-        var booted = Commands.output(check, List.of("xcrun", "simctl", "list", "devices", "booted")).contains(udid);
-        Commands.output(check, List.of("xcrun", "simctl", "bootstatus", udid, "-b"));
+        var booted = simulator.booted();
+        Simulators.boot(udid, check);
         try {
             return simulator(site, out, check, udid, settings);
         } finally {
@@ -193,20 +194,6 @@ public class NativeCheckOperation extends AbstractOperation<NativeCheckOperation
         var command = new ArrayList<>(List.of("xcrun", "simctl", "spawn", udid, ask.getAbsolutePath()));
         command.addAll(arguments(site, data));
         return site.answers(Commands.output(check, command));
-    }
-
-    private static String simulator(String name, File directory)
-    throws Exception {
-        for (var line : Commands.output(directory, List.of("xcrun", "simctl", "list", "devices", "available")).split("\n")) {
-            var trimmed = line.trim();
-            if (trimmed.startsWith(name + " (")) {
-                var udid = trimmed.replaceAll(".*\\(([0-9A-F-]{36})\\).*", "$1");
-                if (udid.length() == 36) {
-                    return udid;
-                }
-            }
-        }
-        throw new IOException("No simulator is called " + name + ": nativeApp().simulator(...)");
     }
 
     // a program and the library go on the emulator or the device that adb sees

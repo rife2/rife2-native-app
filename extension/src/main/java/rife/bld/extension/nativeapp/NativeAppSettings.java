@@ -29,8 +29,13 @@ public class NativeAppSettings {
     private String androidNdk_ = "28.2.13676358";
     private File androidSdk_;
     private File jdkLibraries_;
-    private String simulator_ = "iPhone 17";
-    private String visionSimulator_ = "Apple Vision Pro";
+    private String simulator_;
+    private String visionSimulator_;
+    private String frameworkVersion_;
+    private String frameworkBuild_;
+    private String androidBuildTools_ = "35.0.0";
+    private int androidPlatform_ = 35;
+    private final AndroidAppSettings androidApp_ = new AndroidAppSettings();
     private File destinationDirectory_;
 
     /**
@@ -293,7 +298,9 @@ public class NativeAppSettings {
     }
 
     /**
-     * The simulator that {@code app-check ios-sim} runs in.
+     * The simulator that {@code app-check ios-sim} runs in, and that
+     * {@code app-simulator ios-sim} finds; the first iPhone with the newest
+     * iOS when it's not set.
      *
      * @param name the name of the simulator
      * @return these settings
@@ -305,9 +312,9 @@ public class NativeAppSettings {
     }
 
     /**
-     * The simulator that {@code app-check ios-sim} runs in.
+     * The simulator for iOS, when it was set.
      *
-     * @return the simulator that {@code app-check ios-sim} runs in
+     * @return the name of the simulator for iOS, when it was set
      * @since 1.11.0
      */
     public String simulator() {
@@ -315,7 +322,9 @@ public class NativeAppSettings {
     }
 
     /**
-     * The simulator that {@code app-check vision-sim} runs in.
+     * The simulator that {@code app-check vision-sim} runs in, and that
+     * {@code app-simulator vision-sim} finds; the first Apple Vision Pro
+     * with the newest visionOS when it's not set.
      *
      * @param name the name of the simulator
      * @return these settings
@@ -327,13 +336,107 @@ public class NativeAppSettings {
     }
 
     /**
-     * The simulator that {@code app-check vision-sim} runs in.
+     * The simulator for visionOS, when it was set.
      *
-     * @return the simulator that {@code app-check vision-sim} runs in
+     * @return the name of the simulator for visionOS, when it was set
      * @since 1.11.0
      */
     public String visionSimulator() {
         return visionSimulator_;
+    }
+
+    /**
+     * The version and the build number of the frameworks for Apple's
+     * systems, which their Info.plist says; the numbers of the project's
+     * version and build number 1 when it's not set. An app usually gives
+     * them its own.
+     *
+     * @param version the version, like {@code 1.2.0}
+     * @param build the build number, like {@code 52}
+     * @return these settings
+     * @since 1.11.0
+     */
+    public NativeAppSettings frameworkVersion(String version, String build) {
+        frameworkVersion_ = version;
+        frameworkBuild_ = build;
+        return this;
+    }
+
+    /**
+     * The version of the frameworks, when it was set.
+     *
+     * @return the version of the frameworks, when it was set
+     * @since 1.11.0
+     */
+    public String frameworkVersion() {
+        return frameworkVersion_;
+    }
+
+    /**
+     * The build number of the frameworks, when it was set.
+     *
+     * @return the build number of the frameworks, when it was set
+     * @since 1.11.0
+     */
+    public String frameworkBuild() {
+        return frameworkBuild_;
+    }
+
+    /**
+     * The version of the Android SDK's build tools that put an Android app
+     * together; 35.0.0 when it's not set.
+     *
+     * @param version the version
+     * @return these settings
+     * @since 1.11.0
+     */
+    public NativeAppSettings androidBuildTools(String version) {
+        androidBuildTools_ = version;
+        return this;
+    }
+
+    /**
+     * The version of the build tools that put an Android app together.
+     *
+     * @return the version of the build tools
+     * @since 1.11.0
+     */
+    public String androidBuildTools() {
+        return androidBuildTools_;
+    }
+
+    /**
+     * The API level of the Android platform that an Android app is compiled
+     * against, the newest that it knows of; 35 when it's not set.
+     *
+     * @param api the API level
+     * @return these settings
+     * @since 1.11.0
+     */
+    public NativeAppSettings androidPlatform(int api) {
+        androidPlatform_ = api;
+        return this;
+    }
+
+    /**
+     * The API level of the platform that an Android app is compiled against.
+     *
+     * @return the API level of the platform
+     * @since 1.11.0
+     */
+    public int androidPlatform() {
+        return androidPlatform_;
+    }
+
+    /**
+     * What {@code app-android} puts together as an Android app around the
+     * library.
+     *
+     * @return the settings of the Android app
+     * @since 1.11.0
+     */
+    public AndroidAppSettings androidApp() {
+        return androidApp_;
     }
 
     /**

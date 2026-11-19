@@ -32,6 +32,7 @@ Android devices and emulators of `arm64-v8a`.
 | `extension/` | the bld extension `bld-native-app`, which builds the site into a native library and checks it |
 | `checks/ask.c` | asks a native library for addresses without an app, to compare its answers with the JVM's |
 | `checks/android/` | an app made of the Android classes only, which shows a native library and taps through it |
+| `checks/script/` | checks RIFE2's script of the pages, the way a web view of Apple and of Android runs it |
 | `examples/workorders/` | a field service app whose technician's site runs in the office's browser and offline inside an iPhone app |
 
 ## The site
@@ -105,8 +106,25 @@ a page posts. It also:
 - on Apple's systems, replaces the content of the viewport `<meta>` with
   `width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover`,
   so that a page keeps its size under two fingers and is laid out to the
-  edges of the screen, as a screen of an app is. A page that should zoom
-  sets its viewport again after the script.
+  edges of the screen, as a screen of an app is, unless the app says that
+  its pages zoom, with `zooms` on both platforms.
+
+A page and its app tell each other what's their own through
+`window.rife2NativeApp`, the same way on every platform:
+
+```js
+if (rife2NativeApp.hears('saved')) {
+    rife2NativeApp.tell('saved', {name: 'Ada', born: '1815-12-10'});
+}
+rife2NativeApp.on('chart', address => showChart(address));
+```
+
+`tell(name, data)` tells the app something that a script can send, and
+answers whether the app hears it; `hears(name)` says that beforehand. The
+app tells the page what `on(name, listener)` hears. The app says what it
+hears before the page's own scripts run, with the protocol that it speaks,
+which a page reads as `rife2NativeApp.protocol`: 1 has all of this, and an
+app of before it hears nothing of a page's own.
 
 ## The C functions
 
@@ -167,26 +185,50 @@ struct MyApp: App {
 `NativePages` opens links that leave the site in the system, saves or
 shares the files that a page downloads, prints, and loads the page again
 when the system stopped what draws it. It publishes the `path` of the page
-that's shown and whether it `canGoBack`, for what the app shows around the
-pages. An app changes or adds to that by subclassing it, for instance to add
-its own message handlers in `configure(_:)`, or to say what happens when a
-page couldn't be loaded, in its `webView(_:didFail:withError:)` and
-`webView(_:didFailProvisionalNavigation:withError:)`.
+that's shown and whether it `canGoBack` and `canGoForward`, for what the
+app shows around the pages. `NativePages(start:site:background:inspectable:zooms:)`
+also takes the color behind the pages, whether Safari's Web Inspector can
+look into them, and whether they zoom, which on a Mac they always do. Then:
 
-An app that's put together with `swiftc` rather than Xcode builds the
-package with `swift build --product RIFE2NativeApp -c release`, links the
-`libRIFE2NativeApp.a` that it writes to `.build/release` with the site's
-framework, and imports it with `-I .build/release` and
-`-I apple/Sources/CRIFE2NativeApp/include`, which has the module map of
-the C functions.
+| Of `NativePages` | What it does |
+|---|---|
+| `listen(name) { data in }` | hears what a page tells the app with `rife2NativeApp.tell(name, data)`, only from a page of the site; called in `configure(_:)`, so that the first page knows |
+| `tell(name, data)` | tells the page that's shown what it hears with `rife2NativeApp.on(name, listener)` |
+| `call(function, arguments...) { called, result in }` | calls a function of the page, like `showChart` or `charts.show`, found from `window` on as a `function` or a `var` is, with arguments that are given as they are, never written into a script, and tells whether the page has it and what it returned |
+| `press(selector) { pressed in }` | presses what a CSS selector finds on the page, a button for instance |
+| `open(url)` | shows an address of the site, one that a widget was tapped for for instance, and answers whether it was one; before the web view is made, that's the first page |
+| `go(path)` | shows a path of the site |
+| `back()`, `forward()`, `reload()` | as a browser does |
+| `whenLoaded { }` | runs once the page that's loading is there, the one that a redirect leads to, or now when none is; not when the page doesn't load |
+| `own(url)` | whether an address is one of the site, as `NativeSite.own(url)` |
 
-`NativeSite.scheme`, `NativeSite.host` and `NativeSite.properties` are set
-before the first page, when the app wants another address than `app://site`
-or has properties of its own for the site. `NativeSite.shared.get(path)`
+An app adds more by subclassing it: `activated()` is called each time the
+app is in front, also when it starts while the pages are already there, `configure(_:)` and `prepare(_:)` change the web view
+before it's used, and its delegate methods say what happens when a page
+couldn't be loaded, for instance, as long as they call `super`'s.
+
+An app that's put together with `swiftc` rather than Xcode sources
+`apple/native-app.sh`, whose `native_app <triple> <sdk> <directory>`
+builds the package for a system and sets `native_app` to what `swiftc`
+takes to use it, with the site's framework:
+
+```bash
+. ../rife2-native-app/apple/native-app.sh
+native_app arm64-apple-ios17.0 iphoneos build/package
+swiftc -target arm64-apple-ios17.0 ... "${native_app[@]}" -F build/native/ios -framework mysite
+```
+
+`NativeSite.scheme`, `NativeSite.host`, `NativeSite.properties` and
+`NativeSite.arguments` are set before the first page, when the app wants
+another address than `app://site` or has properties of its own for the
+site; setting one after the site started stops a debug build. The texts that
+the pages show of their own, like the page that says why a page couldn't be
+shown, are in `NativeTexts`, for an app to translate. `NativeSite.shared.get(path)`
 answers what's at a path all at once, for what isn't a page in a web view.
 
 An app extension, like a widget, links the package too and asks
-`NativeSite` for what it needs; the web view parts aren't available there.
+`NativeSite` for what it needs; the web view parts aren't available there,
+and `NativeSite.isExtension` says that it's one.
 The site of an extension isn't told the platform, so its pages get no
 script, nor a directory for what lasts, so it keeps cookies only while it
 runs. It starts
@@ -199,12 +241,41 @@ it shows from the iPhone app, which asks its site.
 
 The site's library for Android has the bridge of
 `android/src/rife/nativeapp/android/rife2_native_app.c` linked into it, and
-the app has the classes of `rife.nativeapp.android`. They aren't published
-as a library yet: an app copies `android/src` into its sources, or adds it
-to them in its Gradle build, here from a checkout of this repository beside
-the app's project. They're written for Java 17, and use `androidx.webkit`,
-whose message listener the system's web view of Android has to support,
-as an updated one does (`WebViewFeature.WEB_MESSAGE_LISTENER`):
+the app has the classes of `rife.nativeapp.android`. They're written for
+Java 17, and use `androidx.webkit`, whose message listener the system's web
+view of Android has to support, as an updated one does
+(`WebViewFeature.WEB_MESSAGE_LISTENER`). A page learns what the app hears
+from a script at its start (`WebViewFeature.DOCUMENT_START_SCRIPT`), or on
+an older web view from an object that only answers that.
+
+`./bld app-android` puts an app together around the library, with the
+tools of the Android SDK and without Gradle, from what
+`nativeApp().androidApp()` says: the app's manifest, resources and Java
+sources, the jars that it adds, its version, and the key that signs it.
+It compiles these classes into it, from the extension, which has them in
+the same version as the bridge, adds `androidx.webkit` and the library, and
+checks that the app's classes and these use nothing of Android that came
+after `androidApi(...)`, and no class of Java that Android doesn't have,
+from what the SDK's list of when each came says, much as Gradle's lint
+does. It installs and starts the
+app when adb sees an emulator or a device:
+
+```java
+nativeApp().androidApp()
+    .manifest(new File("android/AndroidManifest.xml"))
+    .resources(new File("android/res"))
+    .sources(new File("android/java"))
+    .version("1.2.0", 52)
+    .key(new File(System.getProperty("user.home"), ".android/myapp.jks"),
+         new File(System.getProperty("user.home"), ".android/myapp.jks.pass"), "myapp");
+```
+
+```console
+./bld app-library android app-android
+```
+
+An app that's built with Gradle adds the classes to its sources, here from
+a checkout of this repository beside the app's project:
 
 ```groovy
 android {
@@ -222,54 +293,37 @@ dependencies {
 }
 ```
 
-An app that's built without Gradle compiles these classes against the
-`classes.jar` of the webkit aar, with `androidx.annotation` on the classpath
-too, or javac warns that it can't find `RestrictTo$Scope`. If such a build
-checks its dex for calls that are newer than its oldest Android, it should
-check the webkit classes apart: they call newer APIs behind their own
-version checks, which lint knows about but a plain scan doesn't.
+and puts `build/native/android/libmysite.so` in its `jniLibs/arm64-v8a`.
+An app needs API level 29 or later, says what its library is called in
+its manifest, `site` when it doesn't:
 
-The app puts `build/native/android/libmysite.so` in its `jniLibs/arm64-v8a`,
-needs API level 29 or later, and an activity shows the site with:
+```xml
+<meta-data android:name="rife2.library" android:value="mysite"/>
+```
+
+and an activity shows the site with:
 
 ```java
-public class MainActivity extends Activity {
-    private NativePages pages_;
-
+public class MainActivity extends NativeActivity {
     @Override
-    protected void onCreate(Bundle state) {
-        super.onCreate(state);
-        NativeSite.library = "mysite";
-        pages_ = new NativePages(this, "/").start(state);
-        setContentView(pages_.shown);
-    }
-
-    @Override
-    protected void onActivityResult(int request, int result, Intent data) {
-        super.onActivityResult(request, result, data);
-        pages_.chosen(request, result, data);
-    }
-
-    @Override
-    protected void onSaveInstanceState(Bundle state) {
-        super.onSaveInstanceState(state);
-        pages_.keep(state);
-    }
-
-    @Override
-    public void onBackPressed() {
-        if (!pages_.back()) {
-            super.onBackPressed();
-        }
-    }
-
-    @Override
-    protected void onDestroy() {
-        pages_.gone();
-        super.onDestroy();
+    protected NativePages pages() {
+        return new NativePages(this, "/");
     }
 }
 ```
+
+`NativeActivity` hands the pages what they need of it: the result of a
+file that was chosen or saved, what's kept when Android takes the activity
+away, the activity being in front again, the back gesture and its end. The
+back gesture shows that it leaves the app only when there's no page to go
+back to, for an app that opts into predictive back, with
+`android:enableOnBackInvokedCallback` or a target SDK that makes it the
+default. The pages are laid out inside the bars of the system, beside a
+camera in the screen and above the keyboard, which an app that targets
+Android 15 or later draws under; an app whose pages go on behind the bars
+overrides `fit(View, WindowInsets)`. Its `open(Intent)` opens an address
+of the site that an intent names, after the app checked that the intent
+is one of its own, since any app can start an exported activity.
 
 and declares the provider that hands a saved file to another app:
 
@@ -279,7 +333,8 @@ and declares the provider that hands a saved file to another app:
 ```
 
 `NativeSite.library`, `NativeSite.host` and `NativeSite.properties` are set
-before the first request, in the `onCreate` of the app's `Application` when
+before the first request, when they aren't what the manifest and the
+defaults say, in the `onCreate` of the app's `Application` when
 it has widgets, since a widget can ask the site first. The site is at
 `https://<package>.invalid`, since a web view of Android only keeps what a
 page stores for an address of the web. That address is where the pages
@@ -289,21 +344,34 @@ answers what's at a path all at once. A response that doesn't end, like an
 event stream, is cancelled when its request returns, since Android takes an
 answer all at once: an `EventSource` in a page gets nothing on Android.
 
-A subclass of `NativePages` adds what's its own to the web view in
-`configure(WebView)`. The pages ask the app through an object that only the
-site's own frames get, so a frame of elsewhere or a sandboxed one can't, and
-the app checks where each message comes from. An interface that an app adds
-with `addJavascriptInterface` reaches every frame, so it's better added the
-same way, with `WebViewCompat.addWebMessageListener`. Nothing but the site
-loads in the web view; an app whose pages show what's on the web allows it
-there with `setBlockNetworkLoads(false)`, which also needs the `INTERNET`
-permission. A
-link out of the site goes to Android, except to a file, a content address
-or an intent. An app that opts into predictive back, with
-`android:enableOnBackInvokedCallback` or a target SDK that makes it the
-default, gets the back button through an `OnBackInvokedCallback` instead of
-`onBackPressed`, and calls `back()` from there. A service worker's requests
-don't reach the app.
+`NativePages` does what it does on Apple's systems, with the same names:
+`listen(name, data -> ...)`, `tell(name, data)`, `call(function, arguments, (called, result) -> ...)`,
+`press(selector, pressed -> ...)`, `open(address)` and `go(path)`, which
+choose the first page before `start`, `back()`, `forward()`, `reload()`,
+`canGoBack()`, `canGoForward()`, `loading()` and `whenLoaded(run)`. What
+a page tells the app arrives as `org.json` reads it. `call` answers what a
+function returned, but not after a promise that it returned was kept,
+since Android's web view doesn't wait for one. A subclass says whether
+pages `zooms()`, which links out of the site `leaves(Uri)` gives to other
+apps, and what's done each time the activity is `activated()`. The texts
+that the pages show of their own, the page that says why a page couldn't
+be shown and the choice to save or share a file, are in `NativeTexts`, for
+an app to translate.
+
+A subclass adds what's its own to the web view in `configure(WebView)`,
+called again for the web view that takes the place of one whose pages
+Android stopped drawing. The pages ask the app through an object that only
+the site's own frames get, so a frame of elsewhere or a sandboxed one can't,
+and the app checks where each message comes from. An interface that an app
+adds with `addJavascriptInterface` reaches every frame, so it's better
+added with `listen`. Nothing but the site loads in the web view; an app
+whose pages show what's on the web allows it there with
+`setBlockNetworkLoads(false)`, which also needs the `INTERNET` permission.
+On Apple's systems, a page can load what's on the web. A link out of the
+site goes to Android, except to a file, a content address or an intent,
+and to what `leaves(Uri)` refuses; on Apple's systems, a link only leaves
+for a scheme of `NativePages.leaving`, which a subclass can change. A
+service worker's requests don't reach the app.
 
 `android/resources/META-INF/proguard/rife2-native-app-android.pro` has the
 rules that keep R8 from removing what the native library calls by name. An
@@ -370,11 +438,14 @@ in RIFE2's wiki describes, since a native image has no java agent.
 | `walk(mainClass, arguments...)` | a class whose `main` goes through the site as the app does, with GraalVM's tracing agent |
 | `property(name, value)` | a property that the site is told on the JVM and by `app-check`, like the app would tell it |
 | `privacyManifest(file)` | the privacy manifest of the framework; without one, it's written from what the library's code uses |
-| `simulator(name)` | the simulator of `app-check ios-sim`, `iPhone 17` unless it's set |
-| `visionSimulator(name)` | the simulator of `app-check vision-sim`, `Apple Vision Pro` unless it's set |
+| `simulator(name)` | the simulator of `app-check ios-sim` and `app-simulator ios-sim`; the first iPhone with the newest iOS unless it's set |
+| `visionSimulator(name)` | the simulator of `app-check vision-sim` and `app-simulator vision-sim`; the first Apple Vision Pro with the newest visionOS unless it's set |
+| `frameworkVersion(version, build)` | the version and the build number in the Info.plist of the frameworks, usually the app's own; the project's version and 1 unless it's set |
 | `androidSdk(directory)` | the Android SDK; `ANDROID_HOME`, or `~/Library/Android/sdk`, when it's not set |
 | `androidNdk(version)` | the version of the NDK in that SDK, `28.2.13676358` unless it's set |
-| `androidApi(level)` | the oldest Android that the library runs on, 29 unless it's set |
+| `androidApi(level)` | the oldest Android that the library and the app of `app-android` run on, 29 unless it's set |
+| `androidBuildTools(version)`, `androidPlatform(level)` | the build tools and the platform of the SDK that `app-android` uses, `35.0.0` and 35 unless they're set |
+| `androidApp()` | what `app-android` puts together: `manifest(file)`, `resources(directory)`, `sources(directories...)`, `libraries(jars...)`, `version(name, code)`, `debuggable(boolean)`, `key(keystore, passwordFile, alias)`, which is made when it isn't there yet, `apk(file)` and `install(boolean)` |
 | `jdkLibraries(directory)` | where `app-jdk-libs` keeps what it builds; `RIFE2_NATIVE_JDK_LIBS`, or `~/.rife2/native-app/jdk-libs`, when it's not set |
 | `destinationDirectory(directory)` | where the libraries are built, a directory for each target and the xcframework beside them; `build/native` unless it's set, which `./bld clean` removes. A directory outside `build`, like `native`, keeps them across a clean build |
 
@@ -394,16 +465,19 @@ throws Exception {
 }
 ```
 
-`NativeCheckOperation` and `NativeJdkLibrariesOperation` are used the same
-way.
+`NativeCheckOperation`, `NativeJdkLibrariesOperation`, `AndroidAppOperation`,
+`SimulatorOperation` and `PrivacyCheckOperation` are used the same way.
 
-That adds three commands, which run on a Mac, for these targets:
+That adds these commands, which run on a Mac:
 
 | Command | What it does |
 |---|---|
 | `./bld app-library mac\|ios\|ios-sim\|vision\|vision-sim\|android` | builds `build/native/<target>/`, or that folder of `destinationDirectory(...)`: a framework for Apple's systems, with a privacy manifest that declares what its code uses, or a shared library for Android with the bridge linked in. For iOS and visionOS it also makes `build/native/<name>.xcframework` of the frameworks for their devices and simulators that were built, which Xcode links |
 | `./bld app-check mac\|ios-sim\|vision-sim\|android` | asks the native library for the addresses of `nativeApp().addresses()`, on this Mac, in a simulator (which it boots and shuts down again when it wasn't running) or on what adb sees, and compares its answers with the JVM's |
 | `./bld app-jdk-libs ios\|ios-sim\|android` | builds the JDK libraries that iOS and Android need and GraalVM doesn't ship, once for every app on this Mac; `android` uses the sources that a run for iOS fetched |
+| `./bld app-android` | puts an Android app together around the library for Android that was built last, see [Android](#android), and starts it on what adb sees |
+| `./bld app-check-privacy path/to/App.app` | checks the privacy manifests of a built app of Apple, its frameworks and its extensions against what their binaries use that Apple asks a reason for, so that App Store Connect doesn't turn a build away for one that's left out and none claims what isn't used |
+| `./bld app-simulator ios-sim\|vision-sim ["name"] [boot]` | prints the UDID of the simulator of the settings, or of that name, for a script that installs and launches an app in it, and starts it first with `boot`. A name in lower case without spaces is taken for the next command, as Xcode's names never are |
 
 GraalVM has no target for visionOS, so a library for it is built as one for
 iOS is, with the JDK libraries for iOS under the platform of visionOS, and
@@ -492,8 +566,34 @@ From the project of the site, with this repository checked out beside it:
 
 builds an app of the Android classes around a library, installs it on
 what adb sees, and goes through it: each step waits until the screen shows
-a text, or taps it. It needs build-tools 35.0.0 and platform 35 in the
-Android SDK.
+a text (`see:`), taps it (`tap:`), types a text where the last tap put the
+cursor (`type:Leaking tap`), scrolls down a screen (`scroll:down`), or waits
+until the app logged a text (`log:`). The app has a page tell the app what
+the app asks it to, through `listen`, `call` and `tell`, and logs that. It
+needs build-tools 35.0.0 and platform 35 in the Android SDK. With the Work
+Orders example, it goes through a form that posts and one that htmx posts,
+which only work when what they post reached the site:
+
+```console
+checks/android/check.sh examples/workorders/build/native/android/libworkorders.so \
+    "log:hears true" "log:heard ping" "log:told true true" \
+    "tap:Sync with the office" "tap:Bakery Lindqvist" "tap:Start the work" "see:In progress" \
+    "scroll:down" "scroll:down" "tap:Part" "type:Gas valve" "tap:Add" "see:1 × Gas valve"
+```
+
+What the screen shows is read through Android's accessibility, which a web
+view sometimes leaves at what a page showed while it loaded; a step that
+doesn't see a text that the screenshot of a failure shows is that.
+
+The Swift package has tests, `swift test`, of which the ones that show the
+pages of a site in a web view run with a site's library for the Mac:
+
+```console
+RIFE2_NATIVE_APP_LIBRARY=$PWD/examples/workorders/build/native/mac/workorders.framework/workorders swift test
+```
+
+and `node checks/script/check.mjs path/to/rife2-native-app.js` checks
+RIFE2's script of the pages, the one in RIFE2's sources or in its jar.
 
 ## More
 

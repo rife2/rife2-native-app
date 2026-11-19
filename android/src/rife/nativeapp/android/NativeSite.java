@@ -32,9 +32,13 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class NativeSite {
     /**
      * The name of the site's native library, {@code site} for
-     * {@code libsite.so}.
+     * {@code libsite.so}; when it's not set, the {@code rife2.library}
+     * meta-data of the app's manifest, or else {@code site}:
+     * <pre>
+     * &lt;meta-data android:name="rife2.library" android:value="mysite"/&gt;
+     * </pre>
      */
-    public static String library = "site";
+    public static String library = null;
     /**
      * The scheme of the address that the web view has the site at. A web
      * view of Android only keeps what a page stores for an address of the
@@ -139,12 +143,26 @@ public final class NativeSite {
         return scheme.equalsIgnoreCase(address.getScheme()) && host(context).equalsIgnoreCase(address.getHost()) && address.getPort() == -1;
     }
 
+    // what the app says the library is called, in its code or its manifest
+    private static String library(Context context) {
+        if (library != null) {
+            return library;
+        }
+        try {
+            var meta = context.getPackageManager().getApplicationInfo(context.getPackageName(), PackageManager.GET_META_DATA).metaData;
+            var named = null == meta ? null : meta.getString("rife2.library");
+            return null == named ? "site" : named;
+        } catch (PackageManager.NameNotFoundException e) {
+            return "site";
+        }
+    }
+
     // Loads the library and starts its Java. Answers why that failed, or
     // nothing: an app that says what went wrong is of more use than one
     // that stops.
     private static String started(Context context) {
         try {
-            System.loadLibrary(library);
+            System.loadLibrary(library(context));
             var told = new LinkedHashMap<String, String>();
             told.put("rife.nativeapp.platform", "android");
             told.put("rife.nativeapp.scheme", scheme);

@@ -67,6 +67,15 @@ public class NativeAppExtensionBuild extends Project {
         resources.mkdirs();
         FileUtils.copy(new File(root, "checks/ask.c"), new File(resources, "ask.c"));
         FileUtils.copy(new File(root, "android/src/rife/nativeapp/android/rife2_native_app.c"), new File(resources, "rife2_native_app.c"));
+        // the Android classes too, which app-android compiles for an app
+        var android = new File(resources, "android");
+        android.mkdirs();
+        var sources = new StringBuilder();
+        for (var source : new File(root, "android/src/rife/nativeapp/android").listFiles((directory, name) -> name.endsWith(".java"))) {
+            FileUtils.copy(source, new File(android, source.getName()));
+            sources.append(source.getName()).append('\n');
+        }
+        FileUtils.writeString(sources.toString(), new File(android, "sources"));
     }
 
     public static void main(String[] args) {

@@ -1,6 +1,5 @@
 import RIFE2NativeApp
 import SwiftUI
-import WebKit
 
 extension UIColor {
     // the color of the bar at the top of the pages, which goes on behind the status bar
@@ -9,7 +8,12 @@ extension UIColor {
 
 @main
 struct WorkOrdersApp: App {
-    @StateObject private var pages: Pages
+    @StateObject private var pages: NativePages
+    #if DEBUG
+    private static let debug = true
+    #else
+    private static let debug = false
+    #endif
 
     init() {
         // the address of the office and who the technician is come from the
@@ -19,7 +23,7 @@ struct WorkOrdersApp: App {
                 NativeSite.properties[name] = value
             }
         }
-        _pages = StateObject(wrappedValue: Pages())
+        _pages = StateObject(wrappedValue: NativePages(background: .bar, inspectable: Self.debug))
     }
 
     var body: some Scene {
@@ -28,16 +32,5 @@ struct WorkOrdersApp: App {
                 .ignoresSafeArea(edges: .bottom)
                 .background(Color(uiColor: .bar).ignoresSafeArea())
         }
-    }
-}
-
-final class Pages: NativePages {
-    override func prepare(_ view: WKWebView) {
-        view.isOpaque = false
-        view.backgroundColor = .bar
-        view.scrollView.backgroundColor = .bar
-        #if DEBUG
-        view.isInspectable = true
-        #endif
     }
 }

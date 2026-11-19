@@ -3,16 +3,12 @@
 # types and signs as a technician does, starting from a fresh install. SHOTS names a directory
 # for the screenshots that the readme shows.
 #
-#   ios/check-app.sh [simulator name]     on "iPhone 17" by default
+#   ios/check-app.sh [simulator name]     on the newest iPhone by default
 set -euo pipefail
 
-device=${1:-iPhone 17}
 cd "$(dirname "$0")/.."
-udid=$(xcrun simctl list devices available | grep -F "    ${device} (" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/' || true)
-if [ -z "$udid" ]; then
-    echo "No simulator is called $device" >&2
-    exit 1
-fi
+udid=$(./bld app-simulator ios-sim ${1:+"$1"} | tail -1)
+device=${1:-the newest iPhone}
 command -v xcodegen > /dev/null || { echo "xcodegen is needed: brew install xcodegen" >&2; exit 1; }
 xcrun simctl bootstatus "$udid" -b > /dev/null
 # a fresh install has an empty database, so the day starts with nothing synced
