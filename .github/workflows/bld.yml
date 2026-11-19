@@ -61,5 +61,6 @@ jobs:
           platform=$(ls -d "$ANDROID_HOME"/platforms/android-* | sort -V | tail -1)
           curl -sfL -o webkit.aar https://dl.google.com/android/maven2/androidx/webkit/webkit/1.12.1/webkit-1.12.1.aar
           echo "18a0a51ad129e0c8563f031d46c8a7e61169f56ae84e562a0d75686941262111  webkit.aar" | shasum -a 256 -c -
+          mkdir -p build/webkit
           unzip -o -q webkit.aar classes.jar -d build/webkit
           javac --release 17 -cp "$platform/android.jar:build/webkit/classes.jar" -d build/android android/src/rife/nativeapp/android/*.java checks/android/src/rife/nativeapp/check/MainActivity.java
