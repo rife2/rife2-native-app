@@ -14,17 +14,16 @@ import rife.resources.exceptions.ResourceWriterErrorException;
 
 import java.sql.SQLException;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.TreeSet;
 import java.util.function.Supplier;
 
 /**
  * The work orders of one database: the office's, or the one on a
  * technician's device. Both have the same tables.
  */
-public class Store {
+public class Store implements AutoCloseable {
     private final Datasource datasource_;
+    private final DbQueryManager queries_;
     private final GenericQueryManager<WorkOrder> orders_;
     private final GenericQueryManager<ChecklistItem> checklist_;
     private final GenericQueryManager<PartUsed> parts_;
@@ -32,6 +31,7 @@ public class Store {
 
     public Store(Datasource datasource) {
         datasource_ = datasource;
+        queries_ = new DbQueryManager(datasource);
         orders_ = GenericQueryManagerFactory.instance(datasource, WorkOrder.class);
         checklist_ = GenericQueryManagerFactory.instance(datasource, ChecklistItem.class);
         parts_ = GenericQueryManagerFactory.instance(datasource, PartUsed.class);
@@ -82,16 +82,17 @@ public class Store {
         }
     }
 
+    @Override
     public void close() {
         datasource_.close();
     }
 
     public void inTransaction(Runnable work) {
-        new DbQueryManager(datasource_).inTransaction(work::run);
+        queries_.inTransaction(work::run);
     }
 
     public <T> T inTransaction(Supplier<T> work) {
-        return new DbQueryManager(datasource_).inTransaction(work::get);
+        return queries_.inTransaction(work::get);
     }
 
     /**
@@ -100,10 +101,23 @@ public class Store {
      * goes ahead.
      */
     public boolean claim(int orderId, String expected, String status) {
-        return new DbQueryManager(datasource_).executeUpdate(new Update(datasource_)
+        return queries_.executeUpdate(new Update(datasource_)
             .table(orders_.getTable())
             .field("status", status)
             .where("id", "=", orderId)
+            .whereAnd("status", "=", expected)) == 1;
+    }
+
+    /**
+     * Changes the status of an order of a technician only when it still has
+     * the expected one and is still the technician's.
+     */
+    public boolean claim(int orderId, String technician, String expected, String status) {
+        return queries_.executeUpdate(new Update(datasource_)
+            .table(orders_.getTable())
+            .field("status", status)
+            .where("id", "=", orderId)
+            .whereAnd("technician", "=", technician)
             .whereAnd("status", "=", expected)) == 1;
     }
 
@@ -135,14 +149,6 @@ public class Store {
 
     public boolean hasOrdersFrom(LocalDate day) {
         return orders_.count(orders_.getCountQuery().where("scheduledFor", ">=", day)) > 0;
-    }
-
-    public List<String> technicians() {
-        var technicians = new TreeSet<String>();
-        for (var order : orders()) {
-            technicians.add(order.getTechnician());
-        }
-        return new ArrayList<>(technicians);
     }
 
     // a new order gets the checklist of its equipment

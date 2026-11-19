@@ -33,39 +33,34 @@ final class Views {
 
     static String statusLabel(String status) {
         return switch (status) {
+            case WorkOrder.SCHEDULED -> "Scheduled";
             case WorkOrder.STARTED -> "In progress";
             case WorkOrder.FINISHED -> "Finished";
             case WorkOrder.REPORTED -> "Sent";
-            default -> "Scheduled";
+            default -> throw new IllegalArgumentException("An order is never " + status);
         };
     }
 
+    // the values of the template named after the properties of the order are set from it, encoded
     static void order(Template t, WorkOrder order, Store store, Function<Photo, String> photoUrl, Clock clock) {
-        t.setValueEncoded("number", order.getNumber());
-        t.setValue("status", order.getStatus());
+        t.setBean(order);
         t.setValue("status_label", statusLabel(order.getStatus()));
-        t.setValueEncoded("customer", order.getCustomer());
-        t.setValueEncoded("address", order.getAddress());
         if (order.getPhone() != null && !order.getPhone().isBlank()) {
-            t.setValueEncoded("phone", order.getPhone());
             t.setValueEncoded("phone_dial", order.getPhone().replaceAll("[^+0-9]", ""));
             t.setBlock("phone_line", "phone_block");
         }
         t.setValue("scheduled", day(order.getScheduledFor()));
-        t.setValueEncoded("arrival", order.getArrival());
-        t.setValueEncoded("equipment", order.getEquipment());
-        t.setValueEncoded("technician", order.getTechnician());
-        t.setValueEncoded("problem", order.getProblem());
         if (order.isDone()) {
             report(t, order, store, photoUrl, clock);
         }
     }
 
     private static void report(Template t, WorkOrder order, Store store, Function<Photo, String> photoUrl, Clock clock) {
-        t.setValue("finished_at", moment(order.getFinishedAt(), clock.getZone()));
-        t.setValue("minutes", order.getMinutes());
-        t.setValueEncoded("signed_by", order.getSignedBy());
-        t.setValueEncoded("notes", order.getNotes());
+        // an order that was finished without its sign-off says what it has
+        if (order.getFinishedAt() != null) {
+            t.setValue("finished_at", moment(order.getFinishedAt(), clock.getZone()));
+        }
+        t.setValueEncoded("signed_by", null == order.getSignedBy() ? "" : order.getSignedBy());
         results(t, store.checklist(order.getId()));
         usedParts(t, store.parts(order.getId()));
         for (var signature : store.photos(order.getId(), Photo.SIGNATURE)) {

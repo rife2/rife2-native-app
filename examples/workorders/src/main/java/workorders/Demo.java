@@ -7,6 +7,8 @@ import java.util.List;
 public final class Demo {
     public static final String TECHNICIAN = "Sam Rivera";
     public static final List<String> TECHNICIANS = List.of(TECHNICIAN, "Alex Moreau");
+    // what the devices and the office share when no token was set
+    public static final String SYNC_TOKEN = "demo";
 
     private Demo() {
     }

@@ -113,7 +113,9 @@ class SignOffTest {
     void signatureAndNameAreNeeded() {
         var signature = toSignature();
         for (var invalid : new String[][]{{"", SIGNATURE}, {"Jo", ""}, {"Jo", "data:image/png;base64,***"},
-                                          {"Jo", "data:text/html;base64,PGI+"}, {"x".repeat(81), SIGNATURE}}) {
+                                          {"Jo", "data:text/html;base64,PGI+"}, {"x".repeat(81), SIGNATURE},
+                                          // a space of a keyboard of another script, which the office would refuse
+                                          {"\u3000", SIGNATURE}}) {
             signature = next(signature, form("signedBy", invalid[0], "signature", invalid[1], "finish", "1"));
             assertTrue(signature.contains("The customer's name and signature are both needed."), invalid[0] + " " + invalid[1]);
         }
@@ -136,6 +138,8 @@ class SignOffTest {
         device.save(elsewhere);
         var page = next(signature, form("signedBy", "Jo", "signature", SIGNATURE, "finish", "1"));
         assertEquals("/order/" + order.getId(), page.path());
+        assertEquals(200, page.status());
+        assertFalse(page.contains("null"));
         assertTrue(device.photos(order.getId(), Photo.SIGNATURE).isEmpty());
     }
 

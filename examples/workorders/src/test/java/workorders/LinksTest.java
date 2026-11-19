@@ -47,10 +47,28 @@ class LinksTest {
 
     @Test
     void anOfficeElsewhereHasToUseHttps() {
-        var failure = assertThrows(IllegalArgumentException.class, () -> Links.http("http://office.example.com", "secret"));
+        // what the settings of the app say fails the sync, not the site
+        var link = Links.http("http://office.example.com", "secret");
+        var failure = assertThrows(IllegalArgumentException.class, () -> link.exchange("{}"));
         assertTrue(failure.getMessage().contains("https"));
-        assertNotNull(Links.http("https://office.example.com", "secret"));
-        assertNotNull(Links.http("http://localhost:8080", "secret"));
+        assertEquals("https://office.example.com/api/sync", Links.sync("https://office.example.com").toString());
+        assertEquals("http://localhost:8080/api/sync", Links.sync("http://localhost:8080").toString());
+        assertThrows(IllegalArgumentException.class, () -> Links.sync("ftp://localhost/"));
+    }
+
+    @Test
+    void anAddressAsItsTypedInTheSettings() {
+        assertEquals("https://office.example.com/api/sync", Links.sync(" https://office.example.com/ ").toString());
+        assertEquals("https://office.example.com/api/sync", Links.sync("HTTPS://office.example.com").toString());
+        assertEquals("http://LOCALHOST:8080/api/sync", Links.sync("http://LOCALHOST:8080").toString());
+        assertEquals("https://example.com/office/api/sync", Links.sync("https://example.com/office/").toString());
+        assertEquals("https://office.example.com/api/sync", Links.sync("https://office.example.com/api/sync").toString());
+        assertEquals("http://[::1]:8080/api/sync", Links.sync("http://[::1]:8080").toString());
+        for (var wrong : new String[] {"office.example.com", "https://office example.com", "https://office.example.com?x=1", "https://office.example.com/#f",
+                                       "https:office", "https://", "http://office.example.com", "https://user:secret@office.example.com",
+                                       "https://office.example.com:99999", "http://localhost@office.example.com"}) {
+            assertThrows(Links.WrongAddressException.class, () -> Links.sync(wrong), wrong);
+        }
     }
 
     private String url() {

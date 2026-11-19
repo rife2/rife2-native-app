@@ -3,11 +3,10 @@ package workorders;
 import rife.config.RifeConfig;
 import rife.engine.*;
 import rife.engine.elements.CsrfProtected;
-import rife.engine.exceptions.EngineException;
 import rife.template.Template;
 import rife.tools.FileUtils;
+import rife.validation.Validated;
 
-import java.io.IOException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -28,8 +27,9 @@ public class FieldSite extends Site {
     private final String technician_;
     private final Sync.Link office_;
     private final Clock clock_;
+    private final Runnable stopped_;
     // a web view sends several requests at once, so what checks the state of
-    // an order and then changes it happens one request at a time
+    // an order and then changes it happens one request at a time, the sync's included
     private final ReentrantLock work_ = new ReentrantLock();
 
     Route today;
@@ -39,15 +39,23 @@ public class FieldSite extends Site {
     Route addPart;
     Route removePart;
     Route addPhoto;
-    Route photo;
+    Photos photos;
     Route signOff;
     Route sync;
 
     public FieldSite(Store store, String technician, Sync.Link office, Clock clock) {
+        this(store, technician, office, clock, () -> {});
+    }
+
+    /**
+     * @param stopped what's stopped with the site, like the demo office that it syncs with
+     */
+    public FieldSite(Store store, String technician, Sync.Link office, Clock clock, Runnable stopped) {
         store_ = store;
         technician_ = technician;
         office_ = office;
         clock_ = clock;
+        stopped_ = stopped;
     }
 
     public void setup() {
@@ -101,16 +109,14 @@ public class FieldSite extends Site {
                 if (null == order) {
                     return false;
                 }
-                var name = c.parameter("part", "").trim();
-                var quantity = c.parameterInt("quantity", 0);
-                if (name.isEmpty() || name.length() > 80 || quantity < 1 || quantity > 99) {
-                    t.setBlock("part_error", "part_error_block");
-                } else {
-                    var part = new PartUsed();
-                    part.setOrderId(order.getId());
-                    part.setPart(name);
-                    part.setQuantity(quantity);
+                // what the technician can fill in, the order is the one of the address
+                var part = c.parametersBean(PartUsed.class);
+                part.setOrderId(order.getId());
+                part.setPart(null == part.getPart() ? null : part.getPart().trim());
+                if (((Validated) part).validate()) {
                     store_.add(part);
+                } else {
+                    t.setBlock("part_error", "part_error_block");
                 }
                 parts(c, t, order);
                 return true;
@@ -159,7 +165,7 @@ public class FieldSite extends Site {
                         photo.setTaken(Instant.now(clock_));
                         store_.add(photo);
                     }
-                    photos(c, t, order);
+                    photoItems(c, t, order);
                     return true;
                 });
                 if (changed) {
@@ -172,20 +178,32 @@ public class FieldSite extends Site {
                 }
             }
         });
-        photo = get("/photo", PathInfoHandling.MAP(m -> m.p("id", "\\d+")), c -> servePhoto(c, store_));
+        photos = group(new Photos(store_));
         signOff = getPost("/sign-off", () -> new SignOff(this));
         sync = post("/sync", c -> {
             try {
-                var result = locked(() -> Sync.run(store_, technician_, office_));
+                var result = Sync.run(store_, technician_, office_, work_);
                 c.redirect(c.urlFor(today)
                     .param("sent", result.sent())
                     .param("refused", result.refused())
                     .param("received", result.received()));
+            } catch (Links.WrongAddressException e) {
+                c.redirect(c.urlFor(today).param("sync", "address"));
             } catch (RuntimeException e) {
                 Logger.getLogger("workorders").log(Level.WARNING, "The sync failed", e);
                 c.redirect(c.urlFor(today).param("sync", "failed"));
             }
         });
+    }
+
+    // the site's database goes with it
+    @Override
+    public void destroy() {
+        try {
+            store_.close();
+        } finally {
+            stopped_.run();
+        }
     }
 
     Store store() {
@@ -212,6 +230,8 @@ public class FieldSite extends Site {
         t.setValue("today", Views.day(day));
         if ("failed".equals(c.parameter("sync"))) {
             t.setBlock("notice", "sync_failed");
+        } else if ("address".equals(c.parameter("sync"))) {
+            t.setBlock("notice", "sync_address");
         } else if (c.parameter("sent") != null) {
             t.setValue("sent", c.parameterInt("sent", 0));
             t.setValue("received", c.parameterInt("received", 0));
@@ -233,14 +253,10 @@ public class FieldSite extends Site {
         for (var order : orders) {
             var scheduled = order.getScheduledFor();
             var later = scheduled.isAfter(day);
+            t.setBean(order, "job_");
             t.setValue("job_url", orderUrl(c, order));
             // an overdue job is still today's work, with the day it was planned for
             t.setValueEncoded("job_when", (scheduled.equals(day) ? "" : Views.day(scheduled) + ", ") + order.getArrival());
-            t.setValueEncoded("job_customer", order.getCustomer());
-            t.setValueEncoded("job_address", order.getAddress());
-            t.setValueEncoded("job_equipment", order.getEquipment());
-            t.setValueEncoded("job_number", order.getNumber());
-            t.setValue("job_status", order.getStatus());
             t.setValue("job_status_label", Views.statusLabel(order.getStatus()));
             t.appendBlock(order.isDone() ? "done_jobs" : later ? "later_jobs" : "today_jobs", "job");
         }
@@ -265,7 +281,7 @@ public class FieldSite extends Site {
             return;
         }
         var t = c.template("field/order");
-        Views.order(t, order, store_, photo -> photoUrl(c, photo), clock_);
+        Views.order(t, order, store_, photo -> photos.url(c, photo), clock_);
         if (WorkOrder.SCHEDULED.equals(order.getStatus())) {
             t.setValue("start_url", c.urlFor(start).param("id", order.getId()));
             t.setBlock("actions", "start_block");
@@ -279,7 +295,7 @@ public class FieldSite extends Site {
             t.setBlock("checklist", "checklist_block");
             parts(c, t, order);
             t.setBlock("parts", "parts_block");
-            photos(c, t, order);
+            photoItems(c, t, order);
             t.setBlock("photos", "photos_block");
             t.setBlock("work", "work_block");
         }
@@ -306,10 +322,6 @@ public class FieldSite extends Site {
         return c.urlFor(this.order).param("id", order.getId()).toString();
     }
 
-    String photoUrl(Context c, Photo photo) {
-        return c.urlFor(this.photo).param("id", photo.getId()).toString();
-    }
-
     private void checklistItem(Context c, Template t, WorkOrder order, ChecklistItem item) {
         t.setValue("item_id", item.getId());
         t.setValue("item_url", c.urlFor(check).param("id", order.getId()).param("item", item.getId()));
@@ -331,36 +343,17 @@ public class FieldSite extends Site {
         }
     }
 
-    private void photos(Context c, Template t, WorkOrder order) {
+    private void photoItems(Context c, Template t, WorkOrder order) {
         t.setValue("photos_url", c.urlFor(addPhoto).param("id", order.getId()));
-        var photos = store_.photos(order.getId(), Photo.PHOTO);
-        if (photos.isEmpty()) {
+        var taken = store_.photos(order.getId(), Photo.PHOTO);
+        if (taken.isEmpty()) {
             t.setBlock("photo_items", "no_photos");
         }
         var number = 0;
-        for (var photo : photos) {
-            t.setValue("photo_url", photoUrl(c, photo));
+        for (var photo : taken) {
+            t.setValue("photo_url", photos.url(c, photo));
             t.setValue("photo_number", ++number);
             t.appendBlock("photo_items", "photo_item");
-        }
-    }
-
-    static void servePhoto(Context c, Store store) {
-        var photo = store.photo(c.parameterInt("id"));
-        if (null == photo) {
-            c.setStatus(404);
-            return;
-        }
-        // a photo never changes, a new one gets a new id
-        c.setHeader("Cache-Control", "private, max-age=31536000, immutable");
-        // even an image that isn't one can't run anything here
-        c.setHeader("X-Content-Type-Options", "nosniff");
-        c.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
-        c.setContentType(Photo.isAccepted(photo.getKind(), photo.getContentType()) ? photo.getContentType() : "application/octet-stream");
-        try {
-            c.outputStream().write(photo.getData());
-        } catch (IOException e) {
-            throw new EngineException(e);
         }
     }
 }

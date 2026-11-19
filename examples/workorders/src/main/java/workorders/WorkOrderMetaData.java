@@ -10,6 +10,8 @@ public class WorkOrderMetaData extends MetaData {
     public static final String[] ARRIVALS = {"08:00 to 10:00", "10:00 to 12:00", "13:00 to 15:00", "15:00 to 17:00"};
     // what the dispatcher fills in
     public static final String DISPATCH = "dispatch";
+    // the longest name of who signs for the work
+    public static final int SIGNER_LENGTH = 80;
 
     // what a date input sends
     private static SimpleDateFormat isoDate() {
@@ -24,7 +26,7 @@ public class WorkOrderMetaData extends MetaData {
         addConstraint(new ConstrainedProperty("officeId").editable(false).unique(true));
         addConstraint(new ConstrainedProperty("number").editable(false).maxLength(20));
         addConstraint(new ConstrainedProperty("status").editable(false).maxLength(20));
-        addConstraint(new ConstrainedProperty("signedBy").editable(false).maxLength(80));
+        addConstraint(new ConstrainedProperty("signedBy").editable(false).maxLength(SIGNER_LENGTH));
         addConstraint(new ConstrainedProperty("finishedAt").editable(false));
         addGroup(DISPATCH)
             .addConstraint(new ConstrainedProperty("customer").notNull(true).notEmpty(true).maxLength(80))

@@ -32,8 +32,9 @@ which makes a framework of about 47 MB that builds in a minute.
 
 | Where | What RIFE2 does there |
 |---|---|
-| `OfficeSite` | routes with path info, forms generated from constraints, validation groups, CSRF protection, a JSON endpoint with a token |
-| `FieldSite` | htmx fragments for the checklist, the parts and the photos, multipart uploads, `PATCH` and `DELETE` routes |
+| `OfficeSite` | routes with path info, forms generated from constraints, validation groups, the dispatcher's pages as a group with CSRF protection, a JSON endpoint with a token beside it |
+| `FieldSite` | htmx fragments for the checklist, the parts and the photos, beans filled and validated from what a page posts, multipart uploads, `PATCH` and `DELETE` routes |
+| `Photos` | a router that both sites add as a group, which serves the photos and signatures and makes their addresses |
 | `SignOff` | a sign-off in three steps written as one method that pauses with `c.pause()`, which is a continuation |
 | `Store` | an embedded H2 database through the generic query manager, with migrations |
 | `Sync` | the JSON that a device and the office exchange, which stays correct when an answer gets lost or two syncs overlap |
@@ -81,7 +82,8 @@ The settings are system properties or environment variables:
 | `workorders.technician` | `WORKORDERS_TECHNICIAN` | `Sam Rivera` |
 
 An office on another machine has to be reached over https, since the token
-and the customers' data travel with each sync.
+and the customers' data travel with each sync. An address that isn't right
+fails the sync, which the technician's page then says, rather than the site.
 
 ## The tests
 
@@ -94,8 +96,9 @@ stand-in for a web view (`Browser`) that keeps the cookies, sends the CSRF
 token and follows redirects. `WorkdayTest` goes through a whole day: the
 dispatcher schedules a job, the technician syncs, works on it offline, signs
 it off and syncs again, and the office reads the report. The others also
-cover syncs that overlap or lose their answer, photos that aren't images, and
-what's refused when an order isn't in the right state.
+cover syncs that overlap or lose their answer, photos that aren't images,
+what's refused when an order isn't in the right state, and the site as the
+app finds it and tells it its settings, a wrong office address included.
 
 ## The iPhone app
 
@@ -108,7 +111,8 @@ ios/build.sh
 ```
 
 This builds the technician's site as a native library, puts it in a SwiftUI
-app with one web view, and starts it in the iPhone 17 simulator. Without the
+app with one web view, and starts it in the simulator of the newest iPhone,
+or the one that its argument names, like `ios/build.sh "iPhone 17"`. Without the
 address of an office, the app syncs with a demo office that runs inside it,
 so it works out of the box. To sync with the office of `./bld run` instead:
 

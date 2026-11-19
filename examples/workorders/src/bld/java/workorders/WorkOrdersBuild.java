@@ -1,10 +1,7 @@
 package workorders;
 
-import rife.bld.BuildCommand;
 import rife.bld.extension.NativeAppProject;
 
-import java.io.File;
-import java.util.ArrayList;
 import java.util.List;
 
 import static rife.bld.dependencies.Repository.*;
@@ -50,37 +47,12 @@ public class WorkOrdersBuild extends NativeAppProject {
     // the sign-off is a continuation, which needs its classes instrumented;
     // doing it ahead of time works the same on the JVM, in a native
     // executable and inside the iOS app
-    @BuildCommand(summary = "Instruments the compiled classes for continuations")
-    public void instrument()
-    throws Exception {
-        var classes = buildMainDirectory().getAbsolutePath();
-        var command = new ArrayList<String>();
-        command.add(javaTool());
-        command.add("-cp");
-        command.add(classes + File.pathSeparator + joinPaths(compileClasspathJars()));
-        command.addAll(List.of("rife.instrument.InstrumentationDeployer", "-d", classes, classes));
-        var process = new ProcessBuilder(command).inheritIO().start();
-        if (process.waitFor() != 0) {
-            throw new IllegalStateException("The instrumentation failed");
-        }
-    }
-
     @Override
     public void compile()
     throws Exception {
         super.compile();
-        instrument();
-    }
-
-    private static String joinPaths(List<File> files) {
-        var joined = new StringBuilder();
-        for (var file : files) {
-            if (!joined.isEmpty()) {
-                joined.append(File.pathSeparator);
-            }
-            joined.append(file.getAbsolutePath());
-        }
-        return joined.toString();
+        // bld's instrument command compiles first, so its operation is what goes after compiling
+        instrumentOperation().executeOnce(() -> instrumentOperation().fromProject(this));
     }
 
     public static void main(String[] args) {

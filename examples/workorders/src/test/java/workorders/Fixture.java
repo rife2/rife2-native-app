@@ -2,6 +2,8 @@ package workorders;
 
 import rife.database.DbQueryManager;
 
+import java.util.Base64;
+
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -15,7 +17,7 @@ final class Fixture {
     static final String TOKEN = "test-token";
     static final List<String> TECHNICIANS = List.of("Sam", "Alex");
     // the smallest PNG, a single pixel
-    static final byte[] PIXEL = java.util.Base64.getDecoder().decode(
+    static final byte[] PIXEL = Base64.getDecoder().decode(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
 
     private Fixture() {

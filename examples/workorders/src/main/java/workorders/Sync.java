@@ -3,11 +3,16 @@ package workorders;
 import rife.json.Json;
 import rife.json.JsonArray;
 import rife.json.JsonObject;
+import rife.validation.Validated;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.List;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -39,45 +44,90 @@ public final class Sync {
         }
     }
 
-    // runs on the device; each finished order goes in a request of its own,
-    // so that one with many photos can't keep the others from being sent
+    // with a lock of its own, for a caller that has the device's database to itself
     public static Result run(Store store, String technician, Link link) {
-        var reports = new ArrayList<JsonObject>();
-        for (var order : store.ordersWithStatus(WorkOrder.FINISHED)) {
-            reports.add(report(store, order));
-        }
+        return run(store, technician, link, new ReentrantLock());
+    }
+
+    // Runs on the device; each finished order goes in a request of its own,
+    // so that one with many photos can't keep the others from being sent.
+    // What the device's database has is read and changed under its lock,
+    // the office is waited for without it, so that the pages can go on.
+    public static Result run(Store store, String technician, Link link, Lock work) {
+        var reports = locked(work, () -> {
+            var read = new ArrayList<JsonObject>();
+            for (var order : store.ordersWithStatus(WorkOrder.FINISHED)) {
+                read.add(report(store, order));
+            }
+            return read;
+        });
         var sent = 0;
+        var acknowledged = 0;
         JsonObject answer = null;
         for (var i = 0; i == 0 || i < reports.size(); i++) {
             var request = new JsonObject().set("technician", technician).set("reports", new JsonArray());
             if (i < reports.size()) {
                 request.getArray("reports").add(reports.get(i));
             }
-            answer = Json.parseObject(link.exchange(request.toString()));
-            var acknowledged = answer.getArray("received");
-            for (var j = 0; j < acknowledged.size(); j++) {
-                var order = store.orderFromOffice(acknowledged.getInt(j));
-                if (order != null && WorkOrder.FINISHED.equals(order.getStatus())) {
-                    order.setStatus(WorkOrder.REPORTED);
-                    store.save(order);
-                    sent++;
+            var said = Json.parseObject(link.exchange(request.toString()));
+            answer = said;
+            // of what the office has, a sync at the same time can have marked some already
+            if (i < reports.size()) {
+                var filed = said.getArray("received");
+                for (var j = 0; j < filed.size(); j++) {
+                    if (filed.getInt(j) == reports.get(i).getInt("officeId")) {
+                        acknowledged++;
+                        break;
+                    }
                 }
             }
+            sent += locked(work, () -> {
+                var marked = 0;
+                var filed = said.getArray("received");
+                for (var j = 0; j < filed.size(); j++) {
+                    var order = store.orderFromOffice(filed.getInt(j));
+                    if (order != null && WorkOrder.FINISHED.equals(order.getStatus())) {
+                        order.setStatus(WorkOrder.REPORTED);
+                        store.save(order);
+                        marked++;
+                    }
+                }
+                return marked;
+            });
         }
 
-        var received = 0;
         var scheduled = answer.getArray("orders");
-        for (var i = 0; i < scheduled.size(); i++) {
-            if (receive(store, scheduled.getObject(i))) {
-                received++;
+        var received = locked(work, () -> {
+            var added = 0;
+            for (var i = 0; i < scheduled.size(); i++) {
+                if (receive(store, scheduled.getObject(i))) {
+                    added++;
+                }
             }
+            return added;
+        });
+        return new Result(sent, reports.size() - acknowledged, received);
+    }
+
+    // a whole number of the JSON, not one that a missing or another value would turn into one
+    private static Integer whole(Object value) {
+        return value instanceof Number number && number.doubleValue() == number.intValue() ? number.intValue() : null;
+    }
+
+    private static <T> T locked(Lock lock, Supplier<T> work) {
+        lock.lock();
+        try {
+            return work.get();
+        } finally {
+            lock.unlock();
         }
-        return new Result(sent, reports.size() - sent, received);
     }
 
     private static JsonObject report(Store store, WorkOrder order) {
         return new JsonObject()
             .set("officeId", order.getOfficeId())
+            // the technician whose order it is, also when the device was given to someone else since
+            .set("technician", order.getTechnician())
             .set("notes", order.getNotes())
             .set("minutes", order.getMinutes())
             .set("signedBy", order.getSignedBy())
@@ -178,13 +228,18 @@ public final class Sync {
 
     // a report that the office already has is acknowledged again, since the
     // device may not have heard the first answer
-    private static boolean file(Store store, String technician, JsonObject report) {
+    private static boolean file(Store store, String device, JsonObject report) {
+        var technician = report.getString("technician", device);
         var order = store.order(report.getInt("officeId"));
         if (null == order || !order.getTechnician().equals(technician)) {
             return false;
         }
-        var photos = new ArrayList<Photo>();
         var sent = report.getArray("photos");
+        var used = report.getArray("parts");
+        if (null == sent || null == used || null == report.getArray("checklist")) {
+            return false;
+        }
+        var photos = new ArrayList<Photo>();
         for (var i = 0; i < sent.size(); i++) {
             var json = sent.getObject(i);
             var photo = new Photo();
@@ -198,38 +253,58 @@ public final class Sync {
             }
             photos.add(photo);
         }
-        return store.inTransaction(() -> {
-            // the second of two syncs with the same report finds it filed
-            if (!store.claim(order.getId(), WorkOrder.SCHEDULED, WorkOrder.FINISHED)) {
-                return store.order(order.getId()).isDone();
+        // what the technician's pages refuse of what's written and used, the office refuses too
+        var written = new Report();
+        written.setNotes(report.getString("notes", null));
+        written.setMinutes(whole(report.get("minutes")));
+        var signer = report.getString("signedBy", "").strip();
+        if (!written.validate() || signer.isBlank() || signer.length() > WorkOrderMetaData.SIGNER_LENGTH) {
+            return false;
+        }
+        var parts = new ArrayList<PartUsed>();
+        for (var i = 0; i < used.size(); i++) {
+            var part = new PartUsed();
+            part.setOrderId(order.getId());
+            part.setPart(used.getObject(i).getString("part", null));
+            part.setQuantity(whole(used.getObject(i).get("quantity")));
+            if (!((Validated) part).validate()) {
+                return false;
             }
-            order.setNotes(report.getString("notes"));
-            order.setMinutes(report.getInt("minutes"));
-            order.setSignedBy(report.getString("signedBy"));
-            order.setFinishedAt(Instant.parse(report.getString("finishedAt")));
-            order.setStatus(WorkOrder.FINISHED);
-            store.save(order);
+            parts.add(part);
+        }
+        return store.inTransaction(() -> filed(store, technician, order.getId(), report, written, signer, parts, photos));
+    }
 
-            store.clearChecklist(order.getId());
-            store.clearParts(order.getId());
-            store.clearPhotos(order.getId());
-            var items = report.getArray("checklist");
-            for (var i = 0; i < items.size(); i++) {
-                var item = items.getObject(i);
-                store.addChecklistItem(order.getId(), i, item.getString("label"), item.getBoolean("done"));
-            }
-            var parts = report.getArray("parts");
-            for (var i = 0; i < parts.size(); i++) {
-                var part = new PartUsed();
-                part.setOrderId(order.getId());
-                part.setPart(parts.getObject(i).getString("part"));
-                part.setQuantity(parts.getObject(i).getInt("quantity"));
-                store.add(part);
-            }
-            for (var photo : photos) {
-                store.add(photo);
-            }
-            return true;
-        });
+    private static boolean filed(Store store, String technician, int orderId, JsonObject report, Report written, String signer,
+                                 List<PartUsed> parts, List<Photo> photos) {
+        // the second of two syncs with the same report finds it filed, an order given to someone else meanwhile isn't
+        if (!store.claim(orderId, technician, WorkOrder.SCHEDULED, WorkOrder.FINISHED)) {
+            var current = store.order(orderId);
+            return current.isDone() && current.getTechnician().equals(technician);
+        }
+        // as it is now that it's claimed, not as it was read before
+        var order = store.order(orderId);
+        order.setNotes(written.getNotes());
+        order.setMinutes(written.getMinutes());
+        order.setSignedBy(signer);
+        order.setFinishedAt(Instant.parse(report.getString("finishedAt")));
+        order.setStatus(WorkOrder.FINISHED);
+        store.save(order);
+
+        store.clearChecklist(order.getId());
+        store.clearParts(order.getId());
+        store.clearPhotos(order.getId());
+        var items = report.getArray("checklist");
+        for (var i = 0; i < items.size(); i++) {
+            var item = items.getObject(i);
+            store.addChecklistItem(order.getId(), i, item.getString("label"), item.getBoolean("done"));
+        }
+        for (var part : parts) {
+            store.add(part);
+        }
+        for (var photo : photos) {
+            store.add(photo);
+        }
+        return true;
     }
 }

@@ -100,12 +100,13 @@ public class SignOff implements Element {
                     c.pause();
 
                     order = started(c, id);
-                    signed_by = c.parameter("signedBy", "").trim();
+                    // also the spaces of other scripts, as the office sees them
+                    signed_by = c.parameter("signedBy", "").strip();
                     if (c.parameter("back") != null) {
                         continue report;
                     }
                     var signature = png(c.parameter("signature", ""));
-                    if (signature != null && !signed_by.isEmpty() && signed_by.length() <= 80) {
+                    if (signature != null && !signed_by.isEmpty() && signed_by.length() <= WorkOrderMetaData.SIGNER_LENGTH) {
                         finish(c, id, report, signed_by, signature);
                         return;
                     }

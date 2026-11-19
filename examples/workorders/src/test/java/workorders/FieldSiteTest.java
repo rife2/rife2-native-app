@@ -2,10 +2,13 @@ package workorders;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import rife.config.RifeConfig;
 import rife.engine.RequestMethod;
 import rife.engine.SiteRunner;
 
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static workorders.Browser.form;
@@ -138,11 +141,26 @@ class FieldSiteTest {
     void invalidPartsAreRefused() {
         var order = synced("Boiler");
         start(order);
-        for (var invalid : new String[][]{{"", "1"}, {"Filter", "0"}, {"Filter", "100"}, {"Filter", "many"}, {"x".repeat(81), "1"}}) {
+        for (var invalid : new String[][]{{"", "1"}, {" ", "1"}, {"Filter", "0"}, {"Filter", "100"}, {"Filter", "many"}, {"Filter", ""}, {"x".repeat(81), "1"}}) {
             var page = browser.hx(RequestMethod.POST, "/order/" + order.getId() + "/parts", form("part", invalid[0], "quantity", invalid[1]));
             assertTrue(page.contains("A part needs a name"), String.join(",", invalid));
         }
+        // nor without a quantity at all
+        assertTrue(browser.hx(RequestMethod.POST, "/order/" + order.getId() + "/parts", form("part", "Filter")).contains("A part needs a name"));
         assertTrue(device.parts(order.getId()).isEmpty());
+    }
+
+    @Test
+    void aPartIsOfTheOrderOfItsAddress() {
+        var order = synced("Boiler");
+        start(order);
+        browser.hx(RequestMethod.POST, "/order/" + order.getId() + "/parts", form("part", "Filter", "quantity", "2", "orderId", "999", "id", "77"));
+        var parts = device.parts(order.getId());
+        assertEquals(1, parts.size());
+        assertEquals("Filter", parts.get(0).getPart());
+        assertEquals(2, parts.get(0).getQuantity());
+        assertNotEquals(77, parts.get(0).getId());
+        assertTrue(device.parts(999).isEmpty());
     }
 
     @Test
@@ -253,6 +271,7 @@ class FieldSiteTest {
         var part = new PartUsed();
         part.setOrderId(order.getId());
         part.setPart("Filter");
+        part.setQuantity(1);
         device.add(part);
         var finished = device.order(order.getId());
         finished.setStatus(WorkOrder.FINISHED);
@@ -294,7 +313,7 @@ class FieldSiteTest {
             return office_link.exchange(request);
         };
         browser.get("/");
-        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        var pool = Executors.newFixedThreadPool(2);
         try {
             var first = pool.submit(() -> browser.send(RequestMethod.POST, "/sync", "application/x-www-form-urlencoded", new byte[0], true));
             var second = pool.submit(() -> browser.send(RequestMethod.POST, "/sync", "application/x-www-form-urlencoded", new byte[0], true));
@@ -314,7 +333,7 @@ class FieldSiteTest {
 
     @Test
     void signOffsLastAWorkingDay() {
-        assertTrue(rife.config.RifeConfig.engine().getContinuationDuration() >= java.util.concurrent.TimeUnit.HOURS.toMillis(10));
+        assertTrue(RifeConfig.engine().getContinuationDuration() >= TimeUnit.HOURS.toMillis(10));
     }
 
     private Browser.Page sync() {

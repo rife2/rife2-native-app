@@ -3,6 +3,7 @@ package workorders.ios;
 import com.sun.net.httpserver.HttpServer;
 import rife.engine.*;
 import rife.nativeapp.NativeApp;
+import rife.tools.FileUtils;
 import workorders.Demo;
 import workorders.OfficeSite;
 import workorders.Store;
@@ -12,10 +13,12 @@ import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.Base64;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
 
 /**
@@ -25,7 +28,7 @@ import java.util.regex.Pattern;
 public final class Embedded {
     private static NativeApp app_;
     // each request has a number of its own, as in the app
-    private static final java.util.concurrent.atomic.AtomicLong NUMBERS = new java.util.concurrent.atomic.AtomicLong();
+    private static final AtomicLong NUMBERS = new AtomicLong();
 
     private Embedded() {
     }
@@ -42,7 +45,7 @@ public final class Embedded {
         var data = new File(args.length > 0 ? args[0] : "build/embedded");
         // the days start without orders on the device
         if (data.exists()) {
-            rife.tools.FileUtils.deleteDirectory(data);
+            FileUtils.deleteDirectory(data);
         }
         relaunch(new File(data, "demo"), null, null);
         new Walk().firstDay();
@@ -86,7 +89,7 @@ public final class Embedded {
     private static HttpServer officeOverHttp(SiteRunner office)
     throws IOException {
         var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        server.createContext("/api/sync", exchange -> {
+        server.createContext(OfficeSite.SYNC_PATH, exchange -> {
             var request = new SiteRequest(RequestMethod.valueOf(exchange.getRequestMethod()))
                 .contentType(exchange.getRequestHeaders().getFirst("Content-Type"))
                 .bodyAsBytes(exchange.getRequestBody().readAllBytes());
@@ -94,7 +97,7 @@ public final class Embedded {
             if (authorization != null) {
                 request.header("Authorization", authorization);
             }
-            var response = office.handle("/api/sync", request);
+            var response = office.handle(OfficeSite.SYNC_PATH, request);
             var body = response.getBytes();
             exchange.sendResponseHeaders(response.getStatus(), body.length == 0 ? -1 : body.length);
             if (body.length > 0) {
@@ -270,7 +273,7 @@ public final class Embedded {
         }
 
         private static String encode(String value) {
-            return java.net.URLEncoder.encode(value, StandardCharsets.UTF_8);
+            return URLEncoder.encode(value, StandardCharsets.UTF_8);
         }
     }
 

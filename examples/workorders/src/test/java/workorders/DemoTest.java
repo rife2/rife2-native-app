@@ -7,6 +7,8 @@ import rife.engine.RequestMethod;
 import rife.engine.SiteCookieJar;
 import rife.engine.SiteRequest;
 import rife.engine.SiteRunner;
+import rife.ioc.HierarchicalProperties;
+import rife.nativeapp.NativeApp;
 
 import java.io.File;
 
@@ -44,19 +46,18 @@ class DemoTest {
 
     @Test
     void deviceWithoutAnOfficeSyncsWithTheDemoOffice(@TempDir File data) {
-        var site = Field.site(data, null);
+        var site = Field.site(data, null, new HierarchicalProperties());
         var runner = new SiteRunner().cookieJar(new SiteCookieJar()).start(site);
         try {
             assertTrue(sync(runner).contains("received=4"));
         } finally {
             runner.stop();
-            site.store().close();
         }
         assertTrue(new File(data, "demo-office.mv.db").exists());
 
         // a restart keeps the device's orders and the demo office's, so that
         // the same orders aren't received a second time
-        var restarted = Field.site(data, null);
+        var restarted = Field.site(data, null, new HierarchicalProperties());
         var again = new SiteRunner().cookieJar(new SiteCookieJar()).start(restarted);
         try {
             assertEquals(4, restarted.store().orders().size());
@@ -64,7 +65,46 @@ class DemoTest {
             assertEquals(4, restarted.store().orders().size());
         } finally {
             again.stop();
-            restarted.store().close();
+        }
+    }
+
+    // as the app has it, which finds the site through its SiteProvider and tells it its settings
+    @Test
+    void theAppsSiteWithTheSettingsThatTheAppTellsIt(@TempDir File data) {
+        try (var app = new NativeApp().property(NativeApp.DATA_PROPERTY, data.getAbsolutePath()).property("workorders.technician", "Jo Bloggs")) {
+            var today = app.runner().handle("/");
+            assertEquals(200, today.getStatus());
+            assertTrue(today.getText().contains("Jo Bloggs"));
+            assertTrue(new File(data, "field.mv.db").exists());
+        }
+    }
+
+    // an address that's set to nothing is the demo office's, also where another office is the default
+    @Test
+    void anEmptyOfficeAddressIsTheDemoOffice(@TempDir File data) {
+        var properties = new HierarchicalProperties().put("workorders.office", "").put("workorders.port", "");
+        assertEquals("", Field.office(properties, "http://localhost:8080"));
+        // another setting that's set to nothing isn't set
+        assertEquals("8081", Settings.value(properties, "workorders.port", "8081"));
+        assertEquals("http://localhost:8080", Field.office(new HierarchicalProperties(), "http://localhost:8080"));
+        assertEquals("https://office.example.com", Field.office(new HierarchicalProperties().put("WORKORDERS_OFFICE", "https://office.example.com"), null));
+        try (var app = new NativeApp().property(NativeApp.DATA_PROPERTY, data.getAbsolutePath()).property("workorders.office", "")) {
+            assertTrue(sync(app.runner()).contains("received=4"));
+        }
+    }
+
+    // what someone types in the settings of the app fails the sync, which says so, not the whole app
+    @Test
+    void aWrongOfficeAddressFailsTheSyncNotTheApp(@TempDir File data) {
+        for (var office : new String[] {"office.example.com", "http://office.example.com", "https://office example.com"}) {
+            try (var app = new NativeApp().property(NativeApp.DATA_PROPERTY, new File(data, String.valueOf(office.hashCode())).getAbsolutePath())
+                .property("workorders.office", office)) {
+                var runner = app.runner();
+                assertTrue(sync(runner).contains("sync=address"), office);
+                var today = runner.handle("/?sync=address");
+                assertEquals(200, today.getStatus());
+                assertTrue(today.getText().contains("address in the settings of the app isn't right"));
+            }
         }
     }
 

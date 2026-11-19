@@ -8,7 +8,18 @@ import rife.engine.SiteRunner;
 import rife.json.Json;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.logging.Handler;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static workorders.Fixture.*;
@@ -216,6 +227,172 @@ class SyncTest {
     }
 
     @Test
+    void reportOfAnOrderGivenToSomeoneElseWhileItsFiledIsRefused() {
+        var scheduled = order(office, TODAY, "08:00 to 10:00", "Boiler", "Sam");
+        Sync.run(device, "Sam", link);
+        finish(device.orderFromOffice(scheduled.getId()));
+        // the dispatcher gives the job to someone else right after the office read the order
+        var reassigning = new Store(office.datasource()) {
+            @Override
+            public boolean claim(int orderId, String technician, String expected, String status) {
+                var order = order(orderId);
+                order.setTechnician("Alex");
+                save(order);
+                return super.claim(orderId, technician, expected, status);
+            }
+        };
+        assertEquals(new Sync.Result(0, 1, 0), Sync.run(device, "Sam", request -> Sync.answer(reassigning, request)));
+        var filed = office.order(scheduled.getId());
+        assertEquals(WorkOrder.SCHEDULED, filed.getStatus());
+        assertEquals("Alex", filed.getTechnician());
+        assertNull(filed.getSignedBy());
+    }
+
+    @Test
+    void reportWithAPartThatThePagesWouldRefuseIsRefused() {
+        var scheduled = order(office, TODAY, "08:00 to 10:00", "Boiler", "Sam");
+        Sync.run(device, "Sam", link);
+        var order = device.orderFromOffice(scheduled.getId());
+        // what only a device that isn't this one would send
+        var part = new PartUsed();
+        part.setOrderId(order.getId());
+        part.setPart("Filter");
+        part.setQuantity(0);
+        device.add(part);
+        finish(order);
+        assertEquals(new Sync.Result(0, 1, 0), Sync.run(device, "Sam", link));
+        assertEquals(WorkOrder.SCHEDULED, office.order(scheduled.getId()).getStatus());
+        assertTrue(office.parts(scheduled.getId()).isEmpty());
+    }
+
+    @Test
+    void reportOfAnOrderOfTheTechnicianBeforeIsFiledForThem() {
+        var scheduled = order(office, TODAY, "08:00 to 10:00", "Boiler", "Sam");
+        Sync.run(device, "Sam", link);
+        finish(device.orderFromOffice(scheduled.getId()));
+        // the device went to someone else, whose settings say so, before it synced
+        assertEquals(new Sync.Result(1, 0, 0), Sync.run(device, "Alex", link));
+        assertEquals(WorkOrder.FINISHED, office.order(scheduled.getId()).getStatus());
+    }
+
+    @Test
+    void reportThatThePagesWouldRefuseIsRefused() {
+        var scheduled = order(office, TODAY, "08:00 to 10:00", "Boiler", "Sam");
+        Sync.run(device, "Sam", link);
+        var order = device.orderFromOffice(scheduled.getId());
+        finish(order);
+        order.setMinutes(-5);
+        order.setNotes(null);
+        device.save(order);
+        assertEquals(new Sync.Result(0, 1, 0), Sync.run(device, "Sam", link));
+        assertEquals(WorkOrder.SCHEDULED, office.order(scheduled.getId()).getStatus());
+        order.setMinutes(45);
+        order.setNotes("Cleaned the fins.");
+        order.setSignedBy(" ");
+        device.save(order);
+        assertEquals(new Sync.Result(0, 1, 0), Sync.run(device, "Sam", link));
+    }
+
+    // what a client that isn't this app could send, each on its own, refused for what it is rather than for failing
+    @Test
+    void reportsThatOnlyAnotherClientWouldSendAreRefused() {
+        var logged = new ArrayList<String>();
+        var handler = new Handler() {
+            public void publish(LogRecord record) {
+                logged.add(record.getMessage());
+            }
+
+            public void flush() {
+            }
+
+            public void close() {
+            }
+        };
+        Logger.getLogger("workorders").addHandler(handler);
+        try {
+            refused();
+        } finally {
+            Logger.getLogger("workorders").removeHandler(handler);
+        }
+        assertEquals(List.of(), logged);
+    }
+
+    private void refused() {
+        var scheduled = order(office, TODAY, "08:00 to 10:00", "Boiler", "Sam");
+        var valid = """
+            {"officeId": %d, "technician": "Sam", "notes": "Cleaned the fins.", "minutes": 45, "signedBy": "Jo Customer",
+             "finishedAt": "2026-11-17T10:15:00Z", "checklist": [], "parts": [], "photos": []}""".formatted(scheduled.getId());
+        for (var wrong : new String[] {"\"minutes\": \"45\"", "\"minutes\": 45.5", "\"minutes\": 4", "\"notes\": \"\"", "\"signedBy\": \"" + "x".repeat(81) + "\"",
+                                       "\"signedBy\": \"\u3000\"", "\"parts\": null", "\"photos\": null", "\"checklist\": null"}) {
+            var key = wrong.substring(0, wrong.indexOf(':') + 1);
+            var report = valid.replaceAll(java.util.regex.Pattern.quote(key) + " [^,}]*", java.util.regex.Matcher.quoteReplacement(wrong));
+            var answer = Json.parseObject(Sync.answer(office, "{\"technician\": \"Sam\", \"reports\": [" + report + "]}"));
+            assertTrue(answer.getArray("received").isEmpty(), wrong);
+        }
+        // and one without a signer
+        var unsigned = valid.replace(", \"signedBy\": \"Jo Customer\"", "");
+        assertTrue(Json.parseObject(Sync.answer(office, "{\"technician\": \"Sam\", \"reports\": [" + unsigned + "]}")).getArray("received").isEmpty());
+        assertEquals(WorkOrder.SCHEDULED, office.order(scheduled.getId()).getStatus());
+        // what's left is filed
+        assertEquals(1, Json.parseObject(Sync.answer(office, "{\"technician\": \"Sam\", \"reports\": [" + valid + "]}")).getArray("received").size());
+    }
+
+    // two syncs at once both send a report, which the office has once, and neither says it was refused
+    @Test
+    void reportOfTwoSyncsAtOnceIsntRefused()
+    throws Exception {
+        var scheduled = order(office, TODAY, "08:00 to 10:00", "Boiler", "Sam");
+        Sync.run(device, "Sam", link);
+        finish(device.orderFromOffice(scheduled.getId()));
+        var lock = new ReentrantLock();
+        var both = new CountDownLatch(2);
+        Sync.Link waiting = request -> {
+            // the second reads the report before the first marks it
+            both.countDown();
+            try {
+                both.await();
+            } catch (InterruptedException e) {
+                throw new IllegalStateException(e);
+            }
+            return link.exchange(request);
+        };
+        var pool = Executors.newFixedThreadPool(2);
+        try {
+            var first = pool.submit(() -> Sync.run(device, "Sam", waiting, lock));
+            var second = pool.submit(() -> Sync.run(device, "Sam", waiting, lock));
+            var results = List.of(first.get(), second.get());
+            assertEquals(1, results.stream().mapToInt(Sync.Result::sent).sum());
+            assertEquals(0, results.stream().mapToInt(Sync.Result::refused).sum());
+        } finally {
+            pool.shutdown();
+        }
+        assertEquals(WorkOrder.REPORTED, device.orderFromOffice(scheduled.getId()).getStatus());
+    }
+
+    // an office that answers with what it has of other reports doesn't make this one sent
+    @Test
+    void reportThatTheOfficeDoesntNameIsntAcknowledged() {
+        var scheduled = order(office, TODAY, "08:00 to 10:00", "Boiler", "Sam");
+        Sync.run(device, "Sam", link);
+        finish(device.orderFromOffice(scheduled.getId()));
+        assertEquals(new Sync.Result(0, 1, 0), Sync.run(device, "Sam", request -> "{\"received\": [" + (scheduled.getId() + 1000) + "], \"orders\": []}"));
+        assertEquals(WorkOrder.FINISHED, device.orderFromOffice(scheduled.getId()).getStatus());
+    }
+
+    @Test
+    void theOfficeIsWaitedForWithoutTheDevicesLock() {
+        order(office, TODAY, "08:00 to 10:00", "Boiler", "Sam");
+        var lock = new ReentrantLock();
+        var held = new AtomicBoolean();
+        assertEquals(new Sync.Result(0, 0, 1), Sync.run(device, "Sam", request -> {
+            held.set(held.get() || lock.isLocked());
+            return link.exchange(request);
+        }, lock));
+        assertFalse(held.get());
+        assertEquals(1, device.orders().size());
+    }
+
+    @Test
     void eachReportTravelsInARequestOfItsOwn() {
         var first = order(office, TODAY, "08:00 to 10:00", "Boiler", "Sam");
         var second = order(office, TODAY, "10:00 to 12:00", "Boiler", "Sam");
@@ -223,13 +400,13 @@ class SyncTest {
         finish(device.orderFromOffice(first.getId()));
         finish(device.orderFromOffice(second.getId()));
 
-        var reports = new java.util.ArrayList<Integer>();
+        var reports = new ArrayList<Integer>();
         Sync.Link counting = request -> {
             reports.add(Json.parseObject(request).getArray("reports").size());
             return link.exchange(request);
         };
         assertEquals(new Sync.Result(2, 0, 0), Sync.run(device, "Sam", counting));
-        assertEquals(java.util.List.of(1, 1), reports);
+        assertEquals(List.of(1, 1), reports);
     }
 
     @Test
@@ -240,12 +417,12 @@ class SyncTest {
             {"technician": "Sam", "reports": [{"officeId": %d, "notes": "Done", "minutes": 10, "signedBy": "Jo",
             "finishedAt": "2026-11-17T10:00:00Z", "checklist": [], "parts": [{"part": "Filter", "quantity": 1}],
             "photos": [{"kind": "photo", "contentType": "image/png", "taken": "2026-11-17T09:00:00Z", "data": "%s"}]}]}"""
-            .formatted(scheduled.getId(), java.util.Base64.getEncoder().encodeToString(PIXEL));
+            .formatted(scheduled.getId(), Base64.getEncoder().encodeToString(PIXEL));
         var threads = 8;
-        var start = new java.util.concurrent.CountDownLatch(1);
-        var pool = java.util.concurrent.Executors.newFixedThreadPool(threads);
+        var start = new CountDownLatch(1);
+        var pool = Executors.newFixedThreadPool(threads);
         try {
-            var answers = new java.util.ArrayList<java.util.concurrent.Future<String>>();
+            var answers = new ArrayList<Future<String>>();
             for (var i = 0; i < threads; i++) {
                 answers.add(pool.submit(() -> {
                     start.await();

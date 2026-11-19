@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static workorders.Fixture.*;
 
@@ -38,7 +40,7 @@ class StoreTest {
         var later = order(store, TODAY.plusDays(1), "08:00 to 10:00", "Boiler", "Sam");
         var afternoon = order(store, TODAY, "13:00 to 15:00", "Boiler", "Sam");
         var morning = order(store, TODAY, "08:00 to 10:00", "Boiler", "Sam");
-        assertEquals(java.util.List.of(morning.getId(), afternoon.getId(), later.getId()),
+        assertEquals(List.of(morning.getId(), afternoon.getId(), later.getId()),
             store.orders().stream().map(WorkOrder::getId).toList());
     }
 
@@ -53,7 +55,7 @@ class StoreTest {
         store.save(finished);
 
         var ids = store.scheduledFor("Sam").stream().map(WorkOrder::getId).toList();
-        assertEquals(java.util.List.of(past.getId(), today.getId(), tomorrow.getId()), ids);
+        assertEquals(List.of(past.getId(), today.getId(), tomorrow.getId()), ids);
     }
 
     @Test
@@ -93,6 +95,14 @@ class StoreTest {
     }
 
     @Test
+    void claimOfATechnicianOnlyChangesTheirOrder() {
+        var order = order(store, TODAY, "08:00 to 10:00", "Boiler", "Sam");
+        assertFalse(store.claim(order.getId(), "Alex", WorkOrder.SCHEDULED, WorkOrder.FINISHED));
+        assertEquals(WorkOrder.SCHEDULED, store.order(order.getId()).getStatus());
+        assertTrue(store.claim(order.getId(), "Sam", WorkOrder.SCHEDULED, WorkOrder.FINISHED));
+    }
+
+    @Test
     void checklistItemOnlyBelongsToItsOrder() {
         var one = order(store, TODAY, "08:00 to 10:00", "Boiler", "Sam");
         var other = order(store, TODAY, "08:00 to 10:00", "Boiler", "Sam");
@@ -108,6 +118,7 @@ class StoreTest {
         var part = new PartUsed();
         part.setOrderId(one.getId());
         part.setPart("Gasket set");
+        part.setQuantity(1);
         store.add(part);
         assertFalse(store.deletePart(other.getId(), part.getId()));
         assertTrue(store.deletePart(one.getId(), part.getId()));
