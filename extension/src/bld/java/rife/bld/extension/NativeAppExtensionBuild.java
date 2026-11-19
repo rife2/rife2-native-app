@@ -34,6 +34,8 @@ public class NativeAppExtensionBuild extends Project {
 
         publishOperation()
             .repository(version.isSnapshot() ? repository("rife2-snapshots") : repository("rife2-releases"))
+            .repository(version.isSnapshot() ? repository("central-snapshots") : repository("central-releases"))
+            .repository(repository("github"))
             .info(new PublishInfo()
                 .groupId("com.uwyn.rife2")
                 .artifactId("bld-native-app")
@@ -54,6 +56,17 @@ public class NativeAppExtensionBuild extends Project {
                     .url("https://github.com/rife2/rife2-native-app"))
                 .signKey(property("sign.key"))
                 .signPassphrase(property("sign.passphrase")));
+    }
+
+    final TestsBadgeOperation testsBadgeOperation = new TestsBadgeOperation();
+
+    @Override
+    public void test()
+    throws Exception {
+        testsBadgeOperation.executeOnce(() -> testsBadgeOperation
+            .url(property("testsBadgeUrl"))
+            .apiKey(property("testsBadgeApiKey"))
+            .fromProject(this));
     }
 
     // the C files are kept once, beside what they belong to, and go into

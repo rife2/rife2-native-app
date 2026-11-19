@@ -4,6 +4,7 @@
 [![Release](https://img.shields.io/github/release/rife2/rife2-native-app.svg)](https://github.com/rife2/rife2-native-app/releases/latest)
 [![Snapshot](https://img.shields.io/maven-metadata/v?metadataUrl=https%3A%2F%2Frepo.rife2.com%2Fsnapshots%2Fcom%2Fuwyn%2Frife2%2Fbld-native-app%2Fmaven-metadata.xml&label=snapshot)](https://repo.rife2.com/#/snapshots/com/uwyn/rife2/bld-native-app)
 [![bld-ci](https://github.com/rife2/rife2-native-app/actions/workflows/bld.yml/badge.svg)](https://github.com/rife2/rife2-native-app/actions/workflows/bld.yml)
+[![Tests](https://rife2.com/tests-badge/badge/com.uwyn.rife2/bld-native-app)](https://github.com/rife2/rife2-native-app/actions/workflows/bld.yml)
 
 # RIFE2 Native App
 

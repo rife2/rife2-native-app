@@ -34,7 +34,10 @@ jobs:
         run: ./bld clean download compile
 
       - name: Run tests
-        run: ./bld test
+        run: >-
+          ./bld test
+          -DtestsBadgeUrl=https://rife2.com/tests-badge/update/com.uwyn.rife2/bld-native-app
+          -DtestsBadgeApiKey=${{ secrets.TESTS_BADGE_API_KEY }}
 
   build-swift:
     runs-on: macos-latest

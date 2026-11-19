@@ -1,4 +1,4 @@
-name: publish
+name: publish-snapshots
 
 on:
   workflow_dispatch:
@@ -7,6 +7,10 @@ jobs:
   publish:
     runs-on: macos-latest
 
+    defaults:
+      run:
+        working-directory: extension
+
     steps:
       - name: Checkout source repository
         uses: actions/checkout@v7
@@ -14,25 +18,44 @@ jobs:
           clean: true
           fetch-depth: 0
 
+      - name: Check version is SNAPSHOT
+        shell: bash
+        run: |
+          if ! grep -q 'version = version(.*"SNAPSHOT")' src/bld/java/rife/bld/extension/NativeAppExtensionBuild.java; then
+            echo "::error:: The version isn't a SNAPSHOT. Aborting publish."
+            exit 1
+          fi
+
       - name: Set up JDK
         uses: actions/setup-java@v6
         with:
           distribution: 'corretto'
           java-version: 17
 
+      - name: Download dependencies
+        run: ./bld download
+
       - name: Import key
         run: echo "${{ secrets.SIGN_SECRET_KEY }}" | gpg --batch --import
 
+      - name: Compile source
+        run: ./bld clean compile
+
+      - name: Run tests
+        run: ./bld test
+
       - name: Publish
-        working-directory: extension
         run: >-
-          ./bld clean download compile test publish
+          ./bld publish
+          -Dbld.repo.github=https://maven.pkg.github.com/rife2/rife2-native-app
+          -Dbld.repo.github.username=${{ secrets.GH_USERNAME }}
+          -Dbld.repo.github.password=${{ secrets.GH_PASSWORD }}
           -Dbld.repo.rife2-snapshots=https://repo.rife2.com/snapshots/
           -Dbld.repo.rife2-snapshots.username=${{ secrets.RIFE2_USERNAME }}
           -Dbld.repo.rife2-snapshots.password=${{ secrets.RIFE2_PASSWORD }}
-          -Dbld.repo.rife2-releases=https://repo.rife2.com/releases/
-          -Dbld.repo.rife2-releases.username=${{ secrets.RIFE2_USERNAME }}
-          -Dbld.repo.rife2-releases.password=${{ secrets.RIFE2_PASSWORD }}
+          -Dbld.repo.central-snapshots=https://central.sonatype.com/repository/maven-snapshots/
+          -Dbld.repo.central-snapshots.username=${{ secrets.SONATYPE_USER }}
+          -Dbld.repo.central-snapshots.password=${{ secrets.SONATYPE_PASSWORD }}
           -Dsign.key=${{ secrets.SIGN_KEY }}
           -Dsign.passphrase=${{ secrets.SIGN_PASSPHRASE }}
 
