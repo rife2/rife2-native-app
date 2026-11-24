@@ -96,12 +96,22 @@ public abstract class NativeActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 30) {
             Api30.fit(shown, insets);
         } else {
+            // the window keeps its pages clear of the bars, which then don't reach this, and leaves the camera to the app
+            var window = shown.getRootWindowInsets();
+            if (null == window) {
+                window = insets;
+            }
             var camera = insets.getDisplayCutout();
-            shown.setPadding(Math.max(insets.getSystemWindowInsetLeft(), null == camera ? 0 : camera.getSafeInsetLeft()),
-                Math.max(insets.getSystemWindowInsetTop(), null == camera ? 0 : camera.getSafeInsetTop()),
-                Math.max(insets.getSystemWindowInsetRight(), null == camera ? 0 : camera.getSafeInsetRight()),
-                Math.max(insets.getSystemWindowInsetBottom(), null == camera ? 0 : camera.getSafeInsetBottom()));
+            shown.setPadding(edge(window.getSystemWindowInsetLeft(), insets.getSystemWindowInsetLeft(), null == camera ? 0 : camera.getSafeInsetLeft()),
+                edge(window.getSystemWindowInsetTop(), insets.getSystemWindowInsetTop(), null == camera ? 0 : camera.getSafeInsetTop()),
+                edge(window.getSystemWindowInsetRight(), insets.getSystemWindowInsetRight(), null == camera ? 0 : camera.getSafeInsetRight()),
+                edge(window.getSystemWindowInsetBottom(), insets.getSystemWindowInsetBottom(), null == camera ? 0 : camera.getSafeInsetBottom()));
         }
+    }
+
+    // how far the pages stay from an edge of the window: clear of its bars and of the camera, less what the window keeps clear itself
+    private static int edge(int bars, int reached, int camera) {
+        return Math.max(0, Math.max(bars, camera) - (bars - reached));
     }
 
     /**

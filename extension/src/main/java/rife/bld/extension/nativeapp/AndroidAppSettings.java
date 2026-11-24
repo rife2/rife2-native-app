@@ -30,6 +30,7 @@ public class AndroidAppSettings {
     private File keystorePassword_;
     private String keyAlias_ = "app";
     private File apk_;
+    private File bundle_;
     private boolean install_ = true;
 
     /**
@@ -254,6 +255,30 @@ public class AndroidAppSettings {
      */
     public File apk() {
         return apk_;
+    }
+
+    /**
+     * Where the app bundle for Google Play is written, which
+     * {@code app-android-bundle} makes; {@code build/android/<library name>.aab}
+     * when it's not set. A relative file is one of the project's.
+     *
+     * @param bundle the file
+     * @return these settings
+     * @since 1.11.0
+     */
+    public AndroidAppSettings bundle(File bundle) {
+        bundle_ = bundle;
+        return this;
+    }
+
+    /**
+     * Where the app bundle is written, when it was set.
+     *
+     * @return the file; or {@code null} when it wasn't set
+     * @since 1.11.0
+     */
+    public File bundle() {
+        return bundle_;
     }
 
     /**

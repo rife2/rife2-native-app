@@ -37,7 +37,9 @@ import java.util.zip.ZipOutputStream;
  * rife2-native-app's use of Android is checked against the oldest Android
  * that the library is for, see {@link NativeAppSettings#androidApi(int)}.
  * The app is signed, and installed and started on the emulator or the
- * device that adb sees, when there's one. What it's made of is in
+ * device that adb sees, when there's one. With {@link #bundle(boolean)} it's
+ * made as the app bundle that Google Play takes instead, with bundletool,
+ * and installed from it as Google Play would. What it's made of is in
  * {@link NativeAppSettings#androidApp()}.
  *
  * @author Geert Bevin (gbevin[remove] at uwyn dot com)
@@ -46,10 +48,14 @@ import java.util.zip.ZipOutputStream;
 public class AndroidAppOperation extends AbstractOperation<AndroidAppOperation> {
     static final String WEBKIT_VERSION = "1.12.1";
     private static final String WEBKIT_SHA256 = "18a0a51ad129e0c8563f031d46c8a7e61169f56ae84e562a0d75686941262111";
+    static final String BUNDLETOOL_VERSION = "1.18.3";
+    private static final String BUNDLETOOL_SHA256 = "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29";
 
     private WebProject project_;
     private NativeAppSettings settings_;
     private File apk_;
+    private boolean bundle_;
+    private File appBundle_;
 
     /**
      * The project whose site this is for, with its settings when it's a
@@ -98,6 +104,40 @@ public class AndroidAppOperation extends AbstractOperation<AndroidAppOperation> 
      */
     public File apk() {
         return apk_;
+    }
+
+    /**
+     * Whether an app bundle is made instead of an app: what Google Play
+     * takes, and turns into the app for each device; {@code false} when it's
+     * not set.
+     *
+     * @param bundle whether a bundle is made
+     * @return this operation
+     * @since 1.11.0
+     */
+    public AndroidAppOperation bundle(boolean bundle) {
+        bundle_ = bundle;
+        return this;
+    }
+
+    /**
+     * Whether an app bundle is made instead of an app.
+     *
+     * @return whether a bundle is made
+     * @since 1.11.0
+     */
+    public boolean bundle() {
+        return bundle_;
+    }
+
+    /**
+     * The app bundle that was made.
+     *
+     * @return the bundle; or {@code null} before this made one
+     * @since 1.11.0
+     */
+    public File appBundle() {
+        return appBundle_;
     }
 
     @Override
@@ -195,14 +235,6 @@ public class AndroidAppOperation extends AbstractOperation<AndroidAppOperation> 
         classpath.subList(1, classpath.size()).forEach(jar -> allDex.add(jar.getAbsolutePath()));
         Commands.output(work, allDex);
 
-        // an app that doesn't take its libraries out of itself when it's installed has them as they are
-        var extracted = !Files.readString(file(app.manifest()).toPath()).replaceAll("\\s", "").matches("(?s).*extractNativeLibs=[\"']false[\"'].*");
-        var packed = new File(out, "packed.apk");
-        pack(linked, dex, library, extracted, packed);
-        var aligned = new File(out, "aligned.apk");
-        // a library that's loaded from the app as it is starts on a page of 16 KB, which some devices have
-        Commands.output(work, List.of(new File(tools, "zipalign").getAbsolutePath(), "-f", "-P", "16", "4", packed.getAbsolutePath(), aligned.getAbsolutePath()));
-
         var keystore = file(app.keystore());
         var password = file(app.keystorePassword());
         if (!keystore.exists()) {
@@ -210,15 +242,60 @@ public class AndroidAppOperation extends AbstractOperation<AndroidAppOperation> 
         } else if (!password.isFile()) {
             throw new IOException(keystore + " is there without its password, which belongs in " + password);
         }
-        apk_ = null == app.apk() ? new File(settings_.destinationDirectory(project_), "android/" + name + ".apk") : file(app.apk());
-        apk_.getParentFile().mkdirs();
-        Commands.output(work, List.of(new File(tools, "apksigner").getAbsolutePath(), "sign", "--ks", keystore.getAbsolutePath(), "--ks-pass", "file:" + password.getAbsolutePath(),
-            "--ks-key-alias", app.keyAlias(), "--out", apk_.getAbsolutePath(), aligned.getAbsolutePath()));
-
-        var said = apk_ + ", " + apk_.length() / (1024 * 1024) + " MB";
+        // an app that doesn't take its libraries out of itself when it's installed has them as they are
+        var extracted = !Files.readString(file(app.manifest()).toPath()).replaceAll("\\s", "").matches("(?s).*extractNativeLibs=[\"']false[\"'].*");
         var adb = new File(sdk, "platform-tools/adb");
-        if (app.install() && adb.canExecute() && seen(adb, work)) {
-            Commands.output(work, List.of(adb.getAbsolutePath(), "install", "-r", apk_.getAbsolutePath()));
+        var install = app.install() && adb.canExecute() && seen(adb, work);
+        File made;
+        if (bundle_) {
+            // the resources linked again as protocol buffers, which is what a bundle has
+            var proto = new File(out, "proto.apk");
+            var protoLink = new ArrayList<>(link);
+            protoLink.set(protoLink.indexOf("-o") + 1, proto.getAbsolutePath());
+            var java = protoLink.indexOf("--java");
+            protoLink.subList(java, java + 2).clear();
+            protoLink.add(2, "--proto-format");
+            Commands.run(work, protoLink);
+            var module = new File(out, "base.zip");
+            module(proto, dex, library, module);
+            var config = new File(out, "BundleConfig.json");
+            Files.writeString(config.toPath(), bundleConfig(extracted));
+            var bundletool = List.of(new File(System.getProperty("java.home"), "bin/java").getAbsolutePath(), "-jar", bundletool().getAbsolutePath());
+            var unsigned = new File(out, "unsigned.aab");
+            Commands.output(work, joined(bundletool, "build-bundle", "--modules=" + module.getAbsolutePath(), "--config=" + config.getAbsolutePath(),
+                "--output=" + unsigned.getAbsolutePath()));
+            appBundle_ = null == app.bundle() ? new File(settings_.destinationDirectory(project_), "android/" + name + ".aab") : file(app.bundle());
+            appBundle_.getParentFile().mkdirs();
+            Commands.output(work, List.of(new File(System.getProperty("java.home"), "bin/jarsigner").getAbsolutePath(), "-keystore", keystore.getAbsolutePath(),
+                "-storepass:file", password.getAbsolutePath(), "-sigalg", "SHA256withRSA", "-digestalg", "SHA-256",
+                "-signedjar", appBundle_.getAbsolutePath(), unsigned.getAbsolutePath(), app.keyAlias()));
+            made = appBundle_;
+            if (install) {
+                // as Google Play installs it on that device
+                var apks = new File(out, "device.apks");
+                Commands.output(work, joined(bundletool, "build-apks", "--bundle=" + appBundle_.getAbsolutePath(), "--output=" + apks.getAbsolutePath(), "--overwrite",
+                    "--connected-device", "--adb=" + adb.getAbsolutePath(), "--ks=" + keystore.getAbsolutePath(), "--ks-pass=file:" + password.getAbsolutePath(),
+                    "--ks-key-alias=" + app.keyAlias()));
+                Commands.output(work, joined(bundletool, "install-apks", "--apks=" + apks.getAbsolutePath(), "--adb=" + adb.getAbsolutePath()));
+            }
+        } else {
+            var packed = new File(out, "packed.apk");
+            pack(linked, dex, library, extracted, packed);
+            var aligned = new File(out, "aligned.apk");
+            // a library that's loaded from the app as it is starts on a page of 16 KB, which some devices have
+            Commands.output(work, List.of(new File(tools, "zipalign").getAbsolutePath(), "-f", "-P", "16", "4", packed.getAbsolutePath(), aligned.getAbsolutePath()));
+            apk_ = null == app.apk() ? new File(settings_.destinationDirectory(project_), "android/" + name + ".apk") : file(app.apk());
+            apk_.getParentFile().mkdirs();
+            Commands.output(work, List.of(new File(tools, "apksigner").getAbsolutePath(), "sign", "--ks", keystore.getAbsolutePath(), "--ks-pass", "file:" + password.getAbsolutePath(),
+                "--ks-key-alias", app.keyAlias(), "--out", apk_.getAbsolutePath(), aligned.getAbsolutePath()));
+            made = apk_;
+            if (install) {
+                Commands.output(work, List.of(adb.getAbsolutePath(), "install", "-r", apk_.getAbsolutePath()));
+            }
+        }
+
+        var said = made + ", " + made.length() / (1024 * 1024) + " MB";
+        if (install) {
             // the activity that the launcher starts, as the last line says
             var resolved = Commands.output(work, List.of(adb.getAbsolutePath(), "shell", "cmd", "package", "resolve-activity", "--brief",
                 "-a", "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER", packageOf(file(app.manifest())))).trim().split("\\s*\n");
@@ -265,17 +342,31 @@ public class AndroidAppOperation extends AbstractOperation<AndroidAppOperation> 
         }
     }
 
-    // the library that the Android classes need beside Android's own, kept where every app on this machine finds it
+    // the library that the Android classes need beside Android's own
     static File webkit()
     throws IOException, java.security.NoSuchAlgorithmException {
-        var webkit = new File(System.getProperty("user.home"), ".rife2/native-app/androidx/webkit-" + WEBKIT_VERSION + ".aar");
-        if (webkit.isFile()) {
-            return webkit;
+        return fetched("https://dl.google.com/android/maven2/androidx/webkit/webkit/" + WEBKIT_VERSION + "/webkit-" + WEBKIT_VERSION + ".aar",
+            "androidx/webkit-" + WEBKIT_VERSION + ".aar", WEBKIT_SHA256, "androidx.webkit " + WEBKIT_VERSION);
+    }
+
+    // what makes an app bundle, and the apps of a device from one
+    static File bundletool()
+    throws IOException, java.security.NoSuchAlgorithmException {
+        return fetched("https://github.com/google/bundletool/releases/download/" + BUNDLETOOL_VERSION + "/bundletool-all-" + BUNDLETOOL_VERSION + ".jar",
+            "bundletool-all-" + BUNDLETOOL_VERSION + ".jar", BUNDLETOOL_SHA256, "bundletool " + BUNDLETOOL_VERSION);
+    }
+
+    // kept where every app on this machine finds it
+    private static File fetched(String address, String name, String sha256, String what)
+    throws IOException, java.security.NoSuchAlgorithmException {
+        var kept = new File(System.getProperty("user.home"), ".rife2/native-app/" + name);
+        if (kept.isFile()) {
+            return kept;
         }
-        webkit.getParentFile().mkdirs();
+        kept.getParentFile().mkdirs();
         // a file of its own, another build can be fetching it too
-        var partial = File.createTempFile("webkit-", ".partial", webkit.getParentFile());
-        try (InputStream in = URI.create("https://dl.google.com/android/maven2/androidx/webkit/webkit/" + WEBKIT_VERSION + "/webkit-" + WEBKIT_VERSION + ".aar").toURL().openStream()) {
+        var partial = File.createTempFile("fetched-", ".partial", kept.getParentFile());
+        try (InputStream in = URI.create(address).toURL().openStream()) {
             Files.copy(in, partial.toPath(), StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
             Files.deleteIfExists(partial.toPath());
@@ -283,12 +374,18 @@ public class AndroidAppOperation extends AbstractOperation<AndroidAppOperation> 
         }
         // under its name only when it's the one that this is for, so that half of it isn't taken for it later
         var digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(partial.toPath())));
-        if (!digest.equals(WEBKIT_SHA256)) {
+        if (!digest.equals(sha256)) {
             Files.delete(partial.toPath());
-            throw new IOException("What Google has as androidx.webkit " + WEBKIT_VERSION + " isn't the one that this is for");
+            throw new IOException("What " + address + " has as " + what + " isn't the one that this is for");
         }
-        Files.move(partial.toPath(), webkit.toPath(), StandardCopyOption.REPLACE_EXISTING);
-        return webkit;
+        Files.move(partial.toPath(), kept.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        return kept;
+    }
+
+    private static List<String> joined(List<String> command, String... arguments) {
+        var all = new ArrayList<>(command);
+        all.addAll(List.of(arguments));
+        return all;
     }
 
     private static void unzip(File archive, String entry, File to)
@@ -366,6 +463,45 @@ public class AndroidAppOperation extends AbstractOperation<AndroidAppOperation> 
             }
             add(out, "lib/arm64-v8a/" + library.getName(), library, compressed);
         }
+    }
+
+    // The base module of an app bundle: what aapt2 linked as protocol buffers,
+    // in the places that a bundle has them, with the classes and the library.
+    static void module(File linked, File dex, File library, File module)
+    throws IOException {
+        try (var zip = new ZipFile(linked); var out = new ZipOutputStream(new FileOutputStream(module))) {
+            var entries = zip.entries();
+            while (entries.hasMoreElements()) {
+                var entry = entries.nextElement();
+                if (entry.isDirectory()) {
+                    continue;
+                }
+                var name = entry.getName();
+                if (name.equals("AndroidManifest.xml")) {
+                    name = "manifest/" + name;
+                } else if (!name.equals("resources.pb") && !name.startsWith("res/") && !name.startsWith("assets/")) {
+                    name = "root/" + name;
+                }
+                out.putNextEntry(new ZipEntry(name));
+                try (var in = zip.getInputStream(entry)) {
+                    in.transferTo(out);
+                }
+                out.closeEntry();
+            }
+            var dexes = dex.list((directory, name) -> name.endsWith(".dex"));
+            for (var name : null == dexes ? new String[0] : dexes) {
+                add(out, "dex/" + name, new File(dex, name), true);
+            }
+            add(out, "lib/arm64-v8a/" + library.getName(), library, true);
+        }
+    }
+
+    // A library that the app takes out of itself when it's installed stays
+    // compressed in the apps that Google Play makes of the bundle, the others
+    // are kept as they are, starting on a page of 16 KB.
+    static String bundleConfig(boolean extracted) {
+        return extracted ? "{\"optimizations\": {\"uncompressNativeLibraries\": {\"enabled\": false}}}\n"
+                         : "{\"optimizations\": {\"uncompressNativeLibraries\": {\"enabled\": true, \"alignment\": \"PAGE_ALIGNMENT_16K\"}}}\n";
     }
 
     private static void add(ZipOutputStream out, String name, File file, boolean compressed)

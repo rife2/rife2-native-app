@@ -83,6 +83,20 @@ public class NativeAppProject extends WebProject {
     }
 
     /**
+     * Makes the app bundle that Google Play takes, of the same app as
+     * {@code app-android}, and installs it as Google Play would on the
+     * emulator or the device that adb sees, when there's one.
+     *
+     * @throws Exception when it can't be done
+     * @since 1.11.0
+     */
+    @BuildCommand(value = "app-android-bundle", summary = "Makes the app bundle of the Android app that Google Play takes")
+    public void appAndroidBundle()
+    throws Exception {
+        new AndroidAppOperation().fromProject(this).bundle(true).execute();
+    }
+
+    /**
      * Checks the privacy manifests of the app for Apple's systems that the
      * first argument names, a {@code .app} directory, against what its
      * binaries use.

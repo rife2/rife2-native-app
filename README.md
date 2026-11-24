@@ -275,6 +275,16 @@ nativeApp().androidApp()
 ./bld app-library android app-android
 ```
 
+`./bld app-android-bundle` makes the same app as the app bundle that Google
+Play takes, `build/android/<library name>.aab` unless `bundle(...)` says
+otherwise, signed with the same key, which is then the upload key. It links
+the resources again in the format of a bundle and packages them with
+bundletool, which it fetches once into `~/.rife2/native-app`. A library that
+the app takes out of itself when it's installed stays compressed in the apps
+that Google Play makes, one that's loaded from the app is kept as it is, on
+pages of 16 KB. When adb sees an emulator or a device, it installs the bundle
+there as Google Play would, and starts the app.
+
 An app that's built with Gradle adds the classes to its sources, here from
 a checkout of this repository beside the app's project:
 
@@ -445,8 +455,8 @@ in RIFE2's wiki describes, since a native image has no java agent.
 | `androidSdk(directory)` | the Android SDK; `ANDROID_HOME`, or `~/Library/Android/sdk`, when it's not set |
 | `androidNdk(version)` | the version of the NDK in that SDK, `28.2.13676358` unless it's set |
 | `androidApi(level)` | the oldest Android that the library and the app of `app-android` run on, 29 unless it's set |
-| `androidBuildTools(version)`, `androidPlatform(level)` | the build tools and the platform of the SDK that `app-android` uses, `35.0.0` and 35 unless they're set |
-| `androidApp()` | what `app-android` puts together: `manifest(file)`, `resources(directory)`, `sources(directories...)`, `libraries(jars...)`, `version(name, code)`, `debuggable(boolean)`, `key(keystore, passwordFile, alias)`, which is made when it isn't there yet, `apk(file)` and `install(boolean)` |
+| `androidBuildTools(version)`, `androidPlatform(level)` | the build tools and the platform of the SDK that `app-android` and `app-android-bundle` use, `35.0.0` and 35 unless they're set |
+| `androidApp()` | what `app-android` and `app-android-bundle` put together: `manifest(file)`, `resources(directory)`, `sources(directories...)`, `libraries(jars...)`, `version(name, code)`, `debuggable(boolean)`, `key(keystore, passwordFile, alias)`, which is made when it isn't there yet, `apk(file)`, `bundle(file)` and `install(boolean)` |
 | `jdkLibraries(directory)` | where `app-jdk-libs` keeps what it builds; `RIFE2_NATIVE_JDK_LIBS`, or `~/.rife2/native-app/jdk-libs`, when it's not set |
 | `destinationDirectory(directory)` | where the libraries are built, a directory for each target and the xcframework beside them; `build/native` unless it's set, which `./bld clean` removes. A directory outside `build`, like `native`, keeps them across a clean build |
 
@@ -477,6 +487,7 @@ That adds these commands, which run on a Mac:
 | `./bld app-check mac\|ios-sim\|vision-sim\|android` | asks the native library for the addresses of `nativeApp().addresses()`, on this Mac, in a simulator (which it boots and shuts down again when it wasn't running) or on what adb sees, and compares its answers with the JVM's |
 | `./bld app-jdk-libs ios\|ios-sim\|android` | builds the JDK libraries that iOS and Android need and GraalVM doesn't ship, once for every app on this Mac; `android` uses the sources that a run for iOS fetched |
 | `./bld app-android` | puts an Android app together around the library for Android that was built last, see [Android](#android), and starts it on what adb sees |
+| `./bld app-android-bundle` | makes the same app as the app bundle that Google Play takes, see [Android](#android), and installs it from the bundle and starts it on what adb sees |
 | `./bld app-check-privacy path/to/App.app` | checks the privacy manifests of a built app of Apple, its frameworks and its extensions against what their binaries use that Apple asks a reason for, so that App Store Connect doesn't turn a build away for one that's left out and none claims what isn't used |
 | `./bld app-simulator ios-sim\|vision-sim ["name"] [boot]` | prints the UDID of the simulator of the settings, or of that name, for a script that installs and launches an app in it, and starts it first with `boot`. A name in lower case without spaces is taken for the next command, as Xcode's names never are |
 

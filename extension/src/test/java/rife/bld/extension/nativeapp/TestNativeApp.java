@@ -501,6 +501,44 @@ class TestNativeApp {
     }
 
     @Test
+    void testAndroidBundleModule(@TempDir Path temp)
+    throws Exception {
+        // what aapt2 links as protocol buffers
+        var linked = temp.resolve("proto.apk").toFile();
+        try (var out = new java.util.zip.ZipOutputStream(new java.io.FileOutputStream(linked))) {
+            out.putNextEntry(new java.util.zip.ZipEntry("res/"));
+            out.closeEntry();
+            for (var name : List.of("AndroidManifest.xml", "resources.pb", "res/layout/main.xml", "assets/page.html", "kept.properties")) {
+                out.putNextEntry(new java.util.zip.ZipEntry(name));
+                out.write(name.getBytes());
+                out.closeEntry();
+            }
+        }
+        var dex = Files.createDirectories(temp.resolve("dex"));
+        Files.writeString(dex.resolve("classes.dex"), "dex");
+        Files.writeString(dex.resolve("classes2.dex"), "dex2");
+        var library = temp.resolve("libsite.so");
+        Files.writeString(library, "library");
+        var module = temp.resolve("base.zip").toFile();
+        AndroidAppOperation.module(linked, dex.toFile(), library.toFile(), module);
+        try (var zip = new java.util.zip.ZipFile(module)) {
+            var names = zip.stream().map(java.util.zip.ZipEntry::getName).sorted().toList();
+            assertEquals(List.of("assets/page.html", "dex/classes.dex", "dex/classes2.dex", "lib/arm64-v8a/libsite.so", "manifest/AndroidManifest.xml",
+                "res/layout/main.xml", "resources.pb", "root/kept.properties"), names);
+            assertEquals("AndroidManifest.xml", new String(zip.getInputStream(zip.getEntry("manifest/AndroidManifest.xml")).readAllBytes()));
+            assertEquals("library", new String(zip.getInputStream(zip.getEntry("lib/arm64-v8a/libsite.so")).readAllBytes()));
+        }
+    }
+
+    @Test
+    void testAndroidBundleKeepsLibrariesAsTheAppTakesThem() {
+        // a library that's taken out of the app when it's installed stays compressed, one that's loaded from the app is aligned for it
+        assertEquals("{\"optimizations\": {\"uncompressNativeLibraries\": {\"enabled\": false}}}\n", AndroidAppOperation.bundleConfig(true));
+        assertEquals("{\"optimizations\": {\"uncompressNativeLibraries\": {\"enabled\": true, \"alignment\": \"PAGE_ALIGNMENT_16K\"}}}\n",
+            AndroidAppOperation.bundleConfig(false));
+    }
+
+    @Test
     void testAndroidClassesAreInTheExtension(@TempDir Path temp)
     throws Exception {
         var sources = AndroidAppOperation.androidSources(temp.toFile()).stream().map(File::getName).toList();
