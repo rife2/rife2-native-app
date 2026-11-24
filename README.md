@@ -329,10 +329,12 @@ away, the activity being in front again, the back gesture and its end. The
 back gesture shows that it leaves the app only when there's no page to go
 back to, for an app that opts into predictive back, with
 `android:enableOnBackInvokedCallback` or a target SDK that makes it the
-default. The pages are laid out inside the bars of the system, beside a
-camera in the screen and above the keyboard, which an app that targets
-Android 15 or later draws under; an app whose pages go on behind the bars
-overrides `fit(View, WindowInsets)`. Its `open(Intent)` opens an address
+default. The pages are laid out inside the bars of the system and beside a
+camera in the screen, which an app that targets Android 15 or later draws
+under, and then above the keyboard too. Otherwise Android moves the window
+for the keyboard itself, as `android:windowSoftInputMode` in the manifest
+says. An app whose pages go on behind the bars overrides
+`fit(View, WindowInsets)`. Its `open(Intent)` opens an address
 of the site that an intent names, after the app checked that the intent
 is one of its own, since any app can start an exported activity.
 
